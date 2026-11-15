@@ -29,6 +29,8 @@ export interface ShelterBasic {
 	name: string;
 	site_kind: SiteKind;
 	operation_status: OperationStatus;
+	/** CR-252: run in another system; operational pickers hide these. */
+	is_external: boolean;
 	province: string | null;
 	capacity: number;
 	/** `feature_flags.accepts_referrals` — undefined/true = accepting (CR-251). */
@@ -43,6 +45,8 @@ export interface ShelterSummary {
 	site_kind: SiteKind;
 	db: string;
 	operation_status: OperationStatus;
+	is_external: boolean;
+	external_url: string | null;
 	capacity: number;
 	shelter_type: string | null;
 	floor_count: number | null;

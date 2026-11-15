@@ -32,6 +32,10 @@ class ShelterItem(BaseModel):
     vulnerable_groups: list[str] | None = None
     admin_type: str | None = None
     accepts_pre_registration: bool = False
+    # CR-252: run in another system; status is `unknown`, never bookable.
+    # Capacity is the entered value (0 = not entered).
+    is_external: bool = False
+    external_url: str | None = None
     readiness_status: str | None = None
     readiness_tier: str | None = None
     readiness_assessed_at: datetime | None = None
@@ -133,6 +137,10 @@ class ShelterDetail(BaseModel):
     contact: ShelterContactDetail
     faq: list[ShelterFaqDetail]
     accepts_pre_registration: bool = False
+    # CR-252: run in another system; status is `UNKNOWN`, never bookable.
+    # Capacity is the entered value (0 = not entered).
+    is_external: bool = False
+    external_url: str | None = None
     # CR-205: ticked storage points with a pin, projected by the worker. [] = the shelter's
     # own location is the only drop-off point. Detail only; the list does not carry it.
     donation_points: list[DonationPoint] = Field(default_factory=list)

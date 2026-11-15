@@ -82,6 +82,10 @@ class PublicShelter(Document):
     status: str = "open"
     location_status: str = "open"
     is_active: bool = True
+    # CR-252: run in another system — status `unknown`, never bookable.
+    # Capacity is the entered value (0 = not entered).
+    is_external: bool = False
+    external_url: str | None = None
     location_type: str = "shelter"
     location_subtype: str | None = None
     location: GeoJsonPoint | None = None
