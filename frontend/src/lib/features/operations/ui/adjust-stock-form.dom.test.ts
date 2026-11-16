@@ -68,10 +68,16 @@ vi.mock('../application/use-stock-form-items.svelte', () => ({
 vi.mock('../application/use-storage-points.svelte', () => ({
 	useStoragePoints: () => ({ points: [] })
 }));
-vi.mock('$lib/features/catalog', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/features/catalog')>()),
-	useUnitsOfMeasure: () => ({ data: [] })
-}));
+vi.mock('$lib/features/catalog', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/features/catalog')>();
+	return {
+		...actual,
+		useUnitsOfMeasure: () => ({ data: [] }),
+		useUnitDimensionResolver: () => ({
+			resolve: (unit: string) => actual.resolveUnitDimension(unit)
+		})
+	};
+});
 vi.mock('$lib/db/shelter', () => ({ getShelterCode: () => 'SH001' }));
 vi.mock('$app/navigation', () => ({
 	goto: vi.fn(),
@@ -261,3 +267,85 @@ describe('adjust form lots (#569)', () => {
 		expect(toastMock.error).toHaveBeenCalledWith('ล็อตที่เลือกไม่มีคงเหลือแล้ว กรุณาเลือกล็อตใหม่');
 	});
 });
+
+describe('adjust form decimal write-off (#938)', () => {
+	it('resolves a negative decimal delta of -0.1 to a write-off off the lot', async () => {
+		ledger.current = [{ ...INBOUND, qty: '2.1' }];
+		await render();
+		await chooseLot('คงเหลือ 2.1');
+
+		await fillAndSubmit('2', 'เสียหาย / เน่าเสีย');
+
+		expect(submittedInput()).toMatchObject({ qty: '-0.1', lot_ref: INBOUND._id });
+		expect(document.body.textContent).toContain('ตัดออก 0.1');
+		expect(toastMock.error).not.toHaveBeenCalled();
+	});
+});
+
+describe('adjust form whole numbers for count units (#805)', () => {
+	const FRACTIONAL = { ...INBOUND, qty: '2.5' };
+
+	it('writes off a legacy fractional remainder by counting the whole number', async () => {
+		ledger.current = [FRACTIONAL];
+		await render();
+		await chooseLot('คงเหลือ 2.5');
+
+		await fillAndSubmit('2', 'เสียหาย / เน่าเสีย');
+
+		expect(submittedInput()).toMatchObject({ qty: '-0.5', lot_ref: INBOUND._id });
+		expect(toastMock.error).not.toHaveBeenCalled();
+	});
+
+	it('refuses a fractional counted quantity and says why', async () => {
+		ledger.current = [FRACTIONAL];
+		await render();
+		await chooseLot('คงเหลือ 2.5');
+
+		await fillAndSubmit('1.5', 'เสียหาย / เน่าเสีย');
+
+		expect(adjust.mutateAsync).not.toHaveBeenCalled();
+		expect(document.getElementById('new-qty')?.getAttribute('aria-invalid')).toBe('true');
+		expect(document.body.textContent).toContain('หน่วยนับต้องเป็นจำนวนเต็ม');
+	});
+
+	it('keeps the save button off while the counted quantity is fractional', async () => {
+		ledger.current = [FRACTIONAL];
+		await render();
+		await chooseLot('คงเหลือ 2.5');
+		const save = () => document.querySelector<HTMLButtonElement>('form button[type="submit"]')!;
+		const type = async (value: string) => {
+			const qty = document.getElementById('new-qty') as HTMLInputElement;
+			qty.value = value;
+			qty.dispatchEvent(new Event('input', { bubbles: true }));
+			await settle();
+		};
+		[...document.body.querySelectorAll<HTMLButtonElement>('button')]
+			.find((b) => b.textContent?.trim() === 'เสียหาย / เน่าเสีย')!
+			.click();
+
+		await type('1.5');
+		expect(save().disabled).toBe(true);
+
+		await type('2');
+		expect(save().disabled).toBe(false);
+	});
+
+	it('explains a quantity the number input cannot parse, such as "1e"', async () => {
+		ledger.current = [INBOUND, DISPATCH];
+		await render();
+		await chooseLot('คงเหลือ 1199');
+		const qty = document.getElementById('new-qty') as HTMLInputElement;
+
+		typeUnparseable(qty);
+		await settle();
+
+		expect(document.body.textContent).toContain('จำนวนใหม่ต้องไม่ติดลบ ทศนิยมไม่เกิน 4 ตำแหน่ง');
+		expect(qty.getAttribute('aria-invalid')).toBe('true');
+	});
+});
+
+function typeUnparseable(input: HTMLInputElement) {
+	Object.defineProperty(input, 'validity', { configurable: true, value: { badInput: true } });
+	input.value = '';
+	input.dispatchEvent(new Event('input', { bubbles: true }));
+}

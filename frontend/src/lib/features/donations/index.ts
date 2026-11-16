@@ -26,6 +26,15 @@ export type { ReceiveDonationInput } from './domain/public-donation';
 export type { PendingDonationRow, WalkInIntakeInput } from './domain/back-office';
 export { walkInIntakeInputSchema, donationActionRef, donationRefLabel } from './domain/back-office';
 export { maskDonorName, maskDonorPhone, maskDonorEmail } from './domain/donor-contact';
+// Domain — central-warehouse (M6) donations
+export type { M6Summary, M6ConfirmState } from './domain/m6';
+export {
+	canCloseM6WithoutGoods,
+	closeM6Donation,
+	isM6Donation,
+	m6SourceLabel,
+	m6ConfirmState
+} from './domain/m6';
 export {
 	RECEIVED_SEARCH_BY,
 	RECEIVED_SEARCH_Q_MAX,
@@ -169,11 +178,16 @@ export {
 export {
 	DONATION_REJECT_REASON_CODES,
 	DONATION_REJECT_REASON_LABELS,
+	DONATION_REJECT_REASON_SELECTABLE_CODES,
 	REJECT_NOTE_MAX,
 	donorRejectMessage,
 	rejectDonationInputSchema
 } from './domain/reject-reason';
-export type { DonationRejectReasonCode, RejectDonationInput } from './domain/reject-reason';
+export type {
+	DonationRejectReasonCode,
+	RejectDonationInput,
+	SelectableDonationRejectReasonCode
+} from './domain/reject-reason';
 
 // Domain — shared PURE computation (needs board + POST donations). Server-side
 // doc fetching lives in $lib/server/donation-docs (kept out of the client barrel).
@@ -260,5 +274,7 @@ export { default as RejectReasonFields } from './ui/reject-reason-fields.svelte'
 export { default as DropOffCard } from './ui/drop-off-card.svelte';
 export { default as DropOffGroups } from './ui/drop-off-groups.svelte';
 export { default as BoxLabelSheet } from './ui/box-label-sheet.svelte';
+export { default as M6SourceBadge } from './ui/m6-source-badge.svelte';
+export { default as M6ConfirmStatus } from './ui/m6-confirm-status.svelte';
 export { default as LineDecisionToggle } from './ui/line-decision-toggle.svelte';
 export { default as EditDonationItemsDialog } from './ui/edit-donation-items-dialog.svelte';

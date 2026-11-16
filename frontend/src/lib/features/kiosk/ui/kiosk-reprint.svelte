@@ -7,7 +7,7 @@
 	import Search from '@lucide/svelte/icons/search';
 	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { navigateToKioskHome } from '../application/kiosk-navigation';
+	import { goToKioskClosed, navigateToKioskHome } from '../application/kiosk-navigation';
 	import { prepareKioskQrImage, printKioskQrLabels } from '../application/kiosk-label-print';
 	import {
 		ReprintSession,
@@ -56,7 +56,9 @@
 	async function printMembers(
 		members: Parameters<ReprintSessionDeps['print']>[0]
 	): ReturnType<ReprintSessionDeps['print']> {
-		const images = await Promise.all(members.map((m) => prepareKioskQrImage(m.qr_payload ?? '')));
+		const images = await Promise.all(
+			members.map((m) => prepareKioskQrImage(m.qr_payload ?? '', m.label.marker))
+		);
 		sheetLabels = members.map((member, index) => ({
 			key: member.evacuee_id,
 			qrSrc: images[index].src,
@@ -64,7 +66,8 @@
 			name: member.label.name,
 			zone: member.label.zone,
 			emergencyPhone: member.label.emergency_phone,
-			checkedCount: member.label.stations_passed
+			checkedCount: member.label.stations_passed,
+			marker: member.label.marker
 		}));
 		try {
 			return await printKioskQrLabels(
@@ -73,7 +76,8 @@
 					name: member.label.name,
 					zone: member.label.zone,
 					emergencyPhone: member.label.emergency_phone,
-					checkedCount: member.label.stations_passed
+					checkedCount: member.label.stations_passed,
+					marker: member.label.marker
 				})),
 				async () => {
 					// The sheet must be on the page before the browser prints it.
@@ -95,6 +99,7 @@
 					lookup: (input) => lookupPreRegisteredEvacuee(input),
 					reprint: (input) => reprintKioskLabels(input),
 					print: printMembers,
+					onClosed: () => goToKioskClosed(contextQuery),
 					...deps
 				},
 				() => languageStore.current

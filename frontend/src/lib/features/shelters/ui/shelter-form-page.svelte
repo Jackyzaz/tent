@@ -25,6 +25,7 @@
 		AdmissionPolicySection,
 		LuggagePolicySection,
 		ParkingPolicySection,
+		ParkingPointsSection,
 		EMPTY_ADMISSION_POLICY,
 		EMPTY_LUGGAGE_POLICY,
 		EMPTY_PARKING_POLICY,
@@ -56,7 +57,7 @@
 	import Briefcase from '@lucide/svelte/icons/briefcase';
 	import Car from '@lucide/svelte/icons/car';
 	import AlertCircle from '@lucide/svelte/icons/alert-circle';
-	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
+	import BackLink from '$lib/components/back-link.svelte';
 	import Loader2 from '@lucide/svelte/icons/loader-2';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Save from '@lucide/svelte/icons/save';
@@ -71,12 +72,15 @@
 		editBasePath,
 		siteKind,
 		stockedLotCount,
-		stockReady
+		stockReady,
+		backLabel = 'กลับไปหน้าหลัก'
 	}: {
 		id?: string;
 		isEdit: boolean;
 		/** Cancel/back target. */
 		basePath?: string;
+		/** Visible name of `basePath`, shown on the back link. */
+		backLabel?: string;
 		/** Prefix of the `…/edit/{code}` route opened after create; defaults to `basePath`. */
 		editBasePath?: string;
 		siteKind?: SiteKind;
@@ -138,6 +142,8 @@
 			name: d.name,
 			site_kind: d.site_kind,
 			operation_status: d.operation_status,
+			is_external: d.is_external === true,
+			external_url: d.external_url ?? null,
 			shelter_type: d.shelter_type ?? null,
 			floor_count: d.floor_count ?? null,
 			project_level: d.project_level ?? null,
@@ -152,7 +158,7 @@
 			province: d.province ?? null,
 			postal_code: d.postal_code ?? null,
 			key_personnel: d.key_personnel ?? { eoc_liaison: {}, medical_lead: {}, kitchen_lead: {} },
-			capacity: d.capacity,
+			capacity: d.is_external === true && !d.capacity ? undefined : d.capacity,
 			area_m2: d.area_m2 ?? null,
 			area_type: (d.area_type ?? null) as Shelter['area_type'],
 			facilities: d.facilities ?? {},
@@ -161,6 +167,7 @@
 			risk: d.risk ?? {},
 			zones: d.zones ?? [],
 			food_distribution_points: d.food_distribution_points ?? [],
+			parking_points: d.parking_points ?? [],
 			admission_policy: d.admission_policy ?? { ...EMPTY_ADMISSION_POLICY },
 			luggage_policy: d.luggage_policy ?? { ...EMPTY_LUGGAGE_POLICY },
 			parking_policy: d.parking_policy ?? { ...EMPTY_PARKING_POLICY },
@@ -243,7 +250,7 @@
 		saveEdit(data, fresh.data?._rev ?? data._rev);
 	}
 
-	const sections = [
+	const allSections = [
 		{ id: 'basic-info', label: 'ข้อมูลพื้นฐานและที่ตั้ง', icon: MapPin },
 		{ id: 'capacity', label: 'ความจุ โซน และสิ่งอำนวยความสะดวก', icon: Building2 },
 		{ id: 'food-distribution', label: 'จุดแจกอาหาร', icon: UtensilsCrossed },
@@ -252,15 +259,15 @@
 		{ id: 'risk', label: 'ประเมินความเสี่ยงและโครงสร้าง', icon: ShieldAlert },
 		{ id: 'admission-policy', label: 'นโยบายการรับผู้อพยพ', icon: PawPrint },
 		{ id: 'luggage-policy', label: 'นโยบายทรัพย์สิน / สัมภาระ', icon: Briefcase },
-		{ id: 'parking-policy', label: 'นโยบายยานพาหนะ', icon: Car }
+		{ id: 'parking-policy', label: 'นโยบายยานพาหนะ', icon: Car },
+		{ id: 'parking-points', label: 'จุดจอดรถ', icon: Car }
 	];
-	const sectionIds = sections.map((s) => s.id);
 
 	let activeSection = $state('basic-info');
 	let showValidationSummary = $state(false);
 
 	const scrollSpy = createScrollSpy({
-		sectionIds: () => sectionIds,
+		sectionIds: () => sections.map((s) => s.id),
 		prefix: '',
 		stickyVar: '--shelter-form-sticky-top',
 		onActiveChange: (id) => {
@@ -321,6 +328,11 @@
 
 	const { form: formData, submitting, enhance, errors, tainted, isTainted } = form;
 
+	// CR-252 FR-19: an external shelter keeps only basic info — the other sections are not rendered.
+	const isExternal = $derived($formData.is_external === true);
+
+	const sections = $derived(isExternal ? allSections.slice(0, 1) : allSections);
+
 	const invalidSectionIds = $derived.by(() =>
 		showValidationSummary ? findInvalidSectionIds($errors) : []
 	);
@@ -343,6 +355,7 @@
 	if (!$formData.parking_policy) $formData.parking_policy = { ...EMPTY_PARKING_POLICY };
 	if (!$formData.feature_flags) $formData.feature_flags = { ...DEFAULT_SHELTER_FEATURE_FLAGS };
 	if (!$formData.food_distribution_points) $formData.food_distribution_points = [];
+	if (!$formData.parking_points) $formData.parking_points = [];
 
 	// `.pre` so a kind carried in from the list filter (FR-11) lands before the master default seeds.
 	$effect.pre(() => {
@@ -426,6 +439,12 @@
 					classes: 'border border-slate-200 bg-slate-100 text-slate-700',
 					dot: 'bg-slate-400'
 				};
+			case 'unknown':
+				return {
+					label: 'ไม่ทราบสถานะ (Unknown)',
+					classes: 'border border-slate-300 bg-slate-100 text-slate-700',
+					dot: 'bg-slate-400'
+				};
 			case 'standby':
 			default:
 				return {
@@ -454,15 +473,8 @@
 		<div class="mx-auto max-w-7xl px-4 py-3 sm:px-6 sm:py-3.5 lg:px-8">
 			<div class="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
 				<!-- Mobile Rows 1 & 2 / Desktop Left Column -->
-				<div class="flex min-w-0 items-start gap-3">
-					<a
-						href={resolvedBasePath}
-						onclick={handleCancelOrBack}
-						class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-2xs transition hover:bg-slate-50 hover:text-slate-900"
-						title="กลับหน้ารายการศูนย์พักพิง"
-					>
-						<ChevronLeft class="h-4 w-4" />
-					</a>
+				<div class="min-w-0">
+					<BackLink href={resolvedBasePath} label={backLabel} class="mb-1 -ml-3" />
 					<div class="min-w-0 flex-1 space-y-0.5">
 						<!-- Row 1 on mobile: Title + Badge -->
 						<div class="flex flex-wrap items-center gap-2">
@@ -545,7 +557,7 @@
 				href={resolvedBasePath}
 				class="inline-block rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50"
 			>
-				กลับหน้ารวมศูนย์พักพิง
+				{backLabel}
 			</a>
 		</div>
 	{:else}
@@ -671,15 +683,20 @@
 							{formData}
 							canClose={canCloseShelter}
 							storedStatus={isEdit ? storedStatus : undefined}
+							isSystemAdmin={isSystemAdmin(authStore.user?.roles ?? [])}
+							{isEdit}
 						/>
-						<ZonesFacilitiesSection {form} {formData} shelterCode={id} />
-						<FoodDistributionSection {form} {formData} />
-						<StoragePointsSection {form} {formData} {stockedLotCount} {stockReady} />
-						<UtilitiesSection {form} {formData} />
-						<RiskSection {form} {formData} />
-						<AdmissionPolicySection {formData} />
-						<LuggagePolicySection {formData} />
-						<ParkingPolicySection {formData} />
+						{#if !isExternal}
+							<ZonesFacilitiesSection {form} {formData} shelterCode={id} />
+							<FoodDistributionSection {form} {formData} />
+							<StoragePointsSection {form} {formData} {stockedLotCount} {stockReady} />
+							<UtilitiesSection {form} {formData} />
+							<RiskSection {form} {formData} />
+							<AdmissionPolicySection {formData} />
+							<LuggagePolicySection {formData} />
+							<ParkingPolicySection {formData} />
+							<ParkingPointsSection {form} {formData} />
+						{/if}
 					</form>
 				</div>
 			</div>

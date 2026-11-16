@@ -1,7 +1,7 @@
 /**
  * Kitchen journey (ครัวกลางและอาหาร ↔ เบิกวัตถุดิบครัว) against the real local CouchDB.
  *
- * 1. Shelter manager adds an E2E recipe (BOM) from "ฐานสูตร BOM" — kitchen staff can only read
+ * 1. Shelter manager adds an E2E recipe (BOM) from the "สูตรอาหาร (BOM)" tab — kitchen staff can only read
  *    recipes (recipe-tab gates editing to shelter manager / warehouse staff).
  * 2. Kitchen staff creates a meal session ("สร้างมื้อใหม่") for two target groups.
  * 3. Kitchen staff adds two production batches (ชุดการผลิต) to that one session — one per group —
@@ -398,7 +398,9 @@ async function approveBatch(warehouse: Page, batch: Batch, onHand: number): Prom
 	await warehouse.getByRole('button', { name: 'จัดการ lot' }).click();
 	await expect(warehouse.getByLabel('จำนวนที่ใช้จาก Lot นี้')).toHaveValue(
 		String(batch.target / REGULAR_HEADCOUNT),
-		{ timeout: 15_000 }
+		{
+			timeout: 15_000
+		}
 	);
 	// Scope to the dialog — the action bar also has "ยกเลิกตั๋ว".
 	await warehouse.getByRole('dialog').getByRole('button', { name: 'ยกเลิก', exact: true }).click();
@@ -477,7 +479,20 @@ async function receiveBatch(manager: Page, batch: Batch): Promise<void> {
 	await manager.getByRole('combobox').filter({ hasText: 'เลือกอาหารปรุงสำเร็จ' }).click();
 	await manager.getByPlaceholder('ค้นหาชื่ออาหาร...').fill(READY_MEAL);
 	await manager.getByRole('option', { name: READY_MEAL }).click();
-	await expect(manager.getByLabel(/จำนวน/)).toHaveValue(String(batch.actualYield));
+	const yieldQty = manager.getByLabel(/จำนวน/);
+	await expect(yieldQty).toHaveValue(String(batch.actualYield));
+
+	// A ready meal counts in boxes: a part of a box is flagged at once and cannot be confirmed (#805).
+	const confirm = manager.getByRole('button', { name: /ยืนยันตรวจรับเข้าสต็อก/ });
+	await yieldQty.focus();
+	await yieldQty.press('End');
+	await yieldQty.pressSequentially('.5');
+	await expect(yieldQty).toHaveValue(`${batch.actualYield}.5`);
+	await expect(manager.getByText('หน่วยนับต้องเป็นจำนวนเต็ม')).toBeVisible();
+	await expect(yieldQty).toHaveAttribute('aria-invalid', 'true');
+	await expect(confirm).toBeDisabled();
+	await yieldQty.fill(String(batch.actualYield));
+	await expect(manager.getByText('หน่วยนับต้องเป็นจำนวนเต็ม')).toHaveCount(0);
 
 	await manager
 		.getByRole('button', { name: `ยืนยันตรวจรับเข้าสต็อก (รวม ${batch.actualYield})` })
@@ -533,13 +548,13 @@ test.describe(
 			const manager = await openAs(browser, MANAGER);
 			const warehouse = await openAs(browser, WAREHOUSE);
 
-			await test.step('manager adds a recipe from ฐานสูตร BOM (kitchen_staff may only read recipes)', async () => {
+			await test.step('manager adds a recipe from the สูตรอาหาร (BOM) tab (kitchen_staff may only read recipes)', async () => {
 				await manager.goto('/back-office/kitchen');
 				await openSidebar(manager, 'ครัวกลางและอาหาร');
-				await expect(manager.getByRole('heading', { name: 'หน้าสรุปมื้อ' })).toBeVisible({
+				await expect(manager.getByRole('heading', { name: 'รายการมื้ออาหาร' })).toBeVisible({
 					timeout: 15_000
 				});
-				await manager.getByRole('link', { name: 'ฐานสูตร BOM' }).click();
+				await manager.getByRole('button', { name: 'สูตรอาหาร (BOM)' }).click();
 				await expect(manager.getByRole('heading', { name: 'สูตรอาหารมาตรฐาน' })).toBeVisible({
 					timeout: 15_000
 				});
@@ -550,7 +565,7 @@ test.describe(
 				).toBeVisible();
 
 				await form.getByLabel(/ชื่อสูตรอาหาร/).fill(RECIPE);
-				await form.getByRole('button', { name: 'เพิ่ม', exact: true }).click();
+				await form.getByRole('button', { name: 'เพิ่มวัตถุดิบ', exact: true }).first().click();
 				const searches = form.getByPlaceholder('ค้นหาชื่อวัตถุดิบ...');
 				const quantities = form.getByRole('spinbutton');
 				for (const [index, [name, qty]] of [
@@ -563,7 +578,7 @@ test.describe(
 					await quantities.nth(index).fill(qty);
 				}
 				await form.getByLabel(/ยอดกำลังผลิตมาตรฐาน/).fill(String(REGULAR_HEADCOUNT));
-				await form.getByRole('button', { name: '+ เพิ่ม' }).click();
+				await form.getByRole('button', { name: 'บันทึกสูตรอาหาร' }).click();
 				await expect(toast(manager, `เพิ่มข้อมูล ${RECIPE} สำเร็จ`)).toBeVisible({
 					timeout: 15_000
 				});

@@ -110,7 +110,8 @@ describe('POST /api/v1/kiosk/register', () => {
 		mockIssueQr.mockResolvedValue({
 			evacuee_id: 'evacuee:01ARZ3NDEKTSV4RRFFQ69G5FAV',
 			qr_payload: 'evacuee:01ARZ3NDEKTSV4RRFFQ69G5FAV@a1b2c3',
-			printed_at: '2026-11-06T08:15:30.123Z'
+			printed_at: '2026-11-06T08:15:30.123Z',
+			marker: null
 		});
 		mockRegister.mockResolvedValue({
 			_id: 'evacuee:01ARZ3NDEKTSV4RRFFQ69G5FAV',
@@ -119,6 +120,27 @@ describe('POST /api/v1/kiosk/register', () => {
 			phone: '0812345678',
 			consent: { ref: validBody.consent.ref, mode: 'full' }
 		} as never);
+	});
+
+	it('answers 403 KIOSK_CLOSED for a device whose service is closed and registers nothing', async () => {
+		mockAuthenticate.mockResolvedValueOnce({
+			shelter_code: 'SH001',
+			device_id: 'KIOSK-01',
+			station_name: 'โต๊ะ 1',
+			registry_id: 'registry:KIOSK-01',
+			service_open: false
+		} as never);
+
+		const response = await POST(request(validBody));
+
+		expect(response.status).toBe(403);
+		expect(response.headers.get('cache-control')).toBe('no-store');
+		expect(response.headers.get('pragma')).toBe('no-cache');
+		expect((await response.json()).error.code).toBe('KIOSK_CLOSED');
+		expect(mockRegister).not.toHaveBeenCalled();
+		expect(mockRegisterThaid).not.toHaveBeenCalled();
+		expect(mockIssueQr).not.toHaveBeenCalled();
+		expect(mockFindShelter).not.toHaveBeenCalled();
 	});
 
 	it('returns qr_payload null + qr_issue_failed when the QR entry fails; the record stays (FR-EQR-24)', async () => {
@@ -134,6 +156,29 @@ describe('POST /api/v1/kiosk/register', () => {
 		});
 	});
 
+	it('carries the issued vulnerability marker on the label, nothing else about it (#1301)', async () => {
+		mockIssueQr.mockResolvedValue({
+			evacuee_id: 'evacuee:01ARZ3NDEKTSV4RRFFQ69G5FAV',
+			qr_payload: 'evacuee:01ARZ3NDEKTSV4RRFFQ69G5FAV@a1b2c3',
+			printed_at: '2026-11-06T08:15:30.123Z',
+			marker: 'red'
+		});
+		const body = await (await POST(request(validBody))).json();
+		expect(body.label).toEqual({ name: 'สมชาย\nใจดี', phone: '0812345678', marker: 'red' });
+	});
+
+	it('passes a null marker through on the label (#1301)', async () => {
+		const body = await (await POST(request(validBody))).json();
+		expect(body.label.marker).toBeNull();
+	});
+
+	it('leaves the marker off the label when the QR entry fails (#1301)', async () => {
+		mockIssueQr.mockRejectedValue(new Error('CONFLICT'));
+		const body = await (await POST(request(validBody))).json();
+		expect(body.qr_issue_failed).toBe(true);
+		expect(body.label).not.toHaveProperty('marker');
+	});
+
 	it('creates a record only under the authenticated shelter and disables caching', async () => {
 		const response = await POST(request(validBody));
 		expect(response.status).toBe(200);
@@ -142,7 +187,7 @@ describe('POST /api/v1/kiosk/register', () => {
 			status: 'created',
 			evacuee_id: 'evacuee:01ARZ3NDEKTSV4RRFFQ69G5FAV',
 			qr_payload: 'evacuee:01ARZ3NDEKTSV4RRFFQ69G5FAV@a1b2c3',
-			label: { name: 'สมชาย\nใจดี', phone: '0812345678' },
+			label: { name: 'สมชาย\nใจดี', phone: '0812345678', marker: null },
 			consent_ref: validBody.consent.ref,
 			consent_mode: 'full'
 		});
@@ -382,7 +427,7 @@ describe('POST /api/v1/kiosk/register source thaid', () => {
 		expect(response.status).toBe(200);
 		expect(await response.json()).toMatchObject({
 			qr_payload: 'evacuee:01ARZ3NDEKTSV4RRFFQ69G5FAV@a1b2c3',
-			label: { name: 'สมชาย\nใจดี', phone: null }
+			label: { name: 'สมชาย\nใจดี', phone: null, marker: null }
 		});
 		expect(mockRegisterThaid.mock.calls[0]?.[3]).toBeNull();
 	});

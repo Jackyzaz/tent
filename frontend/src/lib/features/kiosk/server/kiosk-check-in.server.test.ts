@@ -4,6 +4,7 @@ import { findMasterByCode } from '$lib/server/shelters.admin';
 import { getEvacueeQrPrints, issueEvacueeQr } from '$lib/server/evacuee-qr-service';
 import {
 	checkInSelectedMembers,
+	HOUSEHOLD_EXPAND_BATCH_SIZE,
 	KioskInputError,
 	KioskLookupUnavailableError,
 	KioskThaidIdentityMismatchError,
@@ -47,7 +48,8 @@ beforeEach(() => {
 	mockIssueQr.mockImplementation(async ({ evacuee_id }) => ({
 		evacuee_id,
 		qr_payload: issuedQr(evacuee_id),
-		printed_at: '2026-11-06T08:15:30.123Z'
+		printed_at: '2026-11-06T08:15:30.123Z',
+		marker: null
 	}));
 	mockQrPrints.mockReset();
 	mockQrPrints.mockResolvedValue([]);
@@ -485,15 +487,58 @@ describe('lookupPreRegisteredEvacuee phone gate', () => {
 		}
 	});
 
-	it('returns too_many after the sixth eligible household', async () => {
+	it('lists every eligible household even when more than five share the phone', async () => {
 		for (let index = 0; index < 6; index += 1) setHousehold([evacuee(index)]);
 
-		expect(await lookupPreRegisteredEvacuee(shelterCode, { source: 'phone', phone })).toEqual({
-			kind: 'too_many'
-		});
+		const result = await lookupPreRegisteredEvacuee(shelterCode, { source: 'phone', phone });
+		expect(result.kind).toBe('candidates');
+		if (result.kind === 'candidates') expect(result.candidates).toHaveLength(6);
 	});
 
-	it('keeps the five-household cap when a candidate id is supplied', async () => {
+	it('bounds concurrent household queries when many households share the phone', async () => {
+		// 45 stays under the 50-doc phone page so the scan is not treated as truncated.
+		const householdCount = 45;
+		for (let index = 0; index < householdCount; index += 1) {
+			// The shared `ids` fixture only has a dozen entries, so mint unique ids here.
+			const suffix = String(index).padStart(2, '0');
+			setHousehold([
+				evacuee(0, {
+					_id: `evacuee:01ARZ3NDEKTSV4RRFFQ69G5${suffix}`,
+					household_id: `household:bulk-${suffix}`,
+					first_name: `สมชาย${suffix}`,
+					created_at: `2026-09-01T00:${suffix}:00.000Z`
+				})
+			]);
+		}
+
+		const baseImpl = mockAdminFetch.getMockImplementation();
+		if (!baseImpl) throw new Error('mock not configured');
+		let inFlight = 0;
+		let maxInFlight = 0;
+		mockAdminFetch.mockImplementation(async (path, init) => {
+			const isHouseholdFind =
+				path.endsWith('/_find') &&
+				typeof (JSON.parse(String(init?.body ?? '{}')) as { selector?: { household_id?: unknown } })
+					.selector?.household_id === 'string';
+			if (!isHouseholdFind) return baseImpl(path, init);
+			inFlight += 1;
+			maxInFlight = Math.max(maxInFlight, inFlight);
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			try {
+				return await baseImpl(path, init);
+			} finally {
+				inFlight -= 1;
+			}
+		});
+
+		const result = await lookupPreRegisteredEvacuee(shelterCode, { source: 'phone', phone });
+		expect(result.kind).toBe('candidates');
+		if (result.kind === 'candidates') expect(result.candidates).toHaveLength(householdCount);
+		expect(maxInFlight).toBeGreaterThan(1);
+		expect(maxInFlight).toBeLessThanOrEqual(HOUSEHOLD_EXPAND_BATCH_SIZE);
+	});
+
+	it('resolves a candidate id when more than five households share the phone', async () => {
 		let firstId = '';
 		for (let index = 0; index < 6; index += 1) {
 			const member = evacuee(index);
@@ -507,7 +552,7 @@ describe('lookupPreRegisteredEvacuee phone gate', () => {
 				phone,
 				primary_evacuee_id: firstId
 			})
-		).toEqual({ kind: 'too_many' });
+		).toMatchObject({ kind: 'household', primary_evacuee_id: firstId });
 	});
 
 	it('finds a kiosk walk-in by phone and lets only checked-in members be reprinted', async () => {
@@ -1193,14 +1238,14 @@ describe('checkInSelectedMembers', () => {
 				status: 'checked_in',
 				stay_status: 'arriving',
 				qr_payload: issuedQr(primary._id),
-				label: { name: 'สมชาย0\nใจดี', phone }
+				label: { name: 'สมชาย0\nใจดี', phone, marker: null }
 			},
 			{
 				evacuee_id: member._id,
 				status: 'checked_in',
 				stay_status: 'arriving',
 				qr_payload: issuedQr(member._id),
-				label: { name: 'สมชาย1\nใจดี', phone }
+				label: { name: 'สมชาย1\nใจดี', phone, marker: null }
 			},
 			{
 				evacuee_id: apiMember._id,
@@ -1270,7 +1315,7 @@ describe('checkInSelectedMembers', () => {
 				status: 'already_checked_in',
 				stay_status: 'arriving',
 				qr_payload: issuedQr(primary._id),
-				label: { name: 'สมชาย0\nใจดี', phone }
+				label: { name: 'สมชาย0\nใจดี', phone, marker: null }
 			},
 			{ evacuee_id: active._id, status: 'already_checked_in', stay_status: 'active' }
 		]);
@@ -1311,7 +1356,7 @@ describe('checkInSelectedMembers', () => {
 				status: 'already_checked_in',
 				stay_status: 'arriving',
 				qr_payload: issuedQr(primary._id),
-				label: { name: 'สมชาย0\nใจดี', phone }
+				label: { name: 'สมชาย0\nใจดี', phone, marker: null }
 			}
 		]);
 		expect(
@@ -1461,7 +1506,7 @@ describe('checkInSelectedMembers kiosk walk-in reprint', () => {
 				status: 'already_checked_in',
 				stay_status: 'arriving',
 				qr_payload: issuedQr(walkIn._id),
-				label: { name: 'สมชาย0\nใจดี', phone }
+				label: { name: 'สมชาย0\nใจดี', phone, marker: null }
 			}
 		]);
 		expect(mockAdminFetch.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(0);
@@ -1522,7 +1567,7 @@ describe('checkInSelectedMembers requiredPrimaryCitizenId', () => {
 				status: 'checked_in',
 				stay_status: 'arriving',
 				qr_payload: issuedQr(primary._id),
-				label: { name: 'สมชาย0\nใจดี', phone }
+				label: { name: 'สมชาย0\nใจดี', phone, marker: null }
 			}
 		]);
 	});
@@ -2727,6 +2772,48 @@ describe('checkInSelectedMembers QR issuing (CR-233)', () => {
 		const results = await checkInSelectedMembers(shelterCode, primary._id, [primary._id]);
 		expect(results[0]).toMatchObject({ status: 'already_checked_in', qr_issue_failed: true });
 		expect(results[0]).not.toHaveProperty('qr_payload');
+	});
+
+	it('carries the issued vulnerability marker on the label so the card matches the log (#1301)', async () => {
+		const primary = evacuee(0);
+		const member = evacuee(1);
+		setHousehold([primary, member], primary);
+		mockIssueQr.mockImplementation(async ({ evacuee_id }) => ({
+			evacuee_id,
+			qr_payload: issuedQr(evacuee_id),
+			printed_at: '2026-11-06T08:15:30.123Z',
+			marker: evacuee_id === primary._id ? 'red' : null
+		}));
+
+		const results = await checkInSelectedMembers(shelterCode, primary._id, [
+			primary._id,
+			member._id
+		]);
+
+		expect(results[0].label?.marker).toBe('red');
+		expect(results[1].label?.marker).toBeNull();
+	});
+
+	it('carries the issued marker for an already-arriving member too (#1301)', async () => {
+		const primary = evacuee(0, { current_stay: { status: 'arriving' } });
+		setHousehold([primary], primary);
+		mockIssueQr.mockImplementation(async ({ evacuee_id }) => ({
+			evacuee_id,
+			qr_payload: issuedQr(evacuee_id),
+			printed_at: '2026-11-06T08:15:30.123Z',
+			marker: 'yellow'
+		}));
+		const results = await checkInSelectedMembers(shelterCode, primary._id, [primary._id]);
+		expect(results[0].label?.marker).toBe('yellow');
+	});
+
+	it('leaves the marker off the label when the QR issue failed (#1301)', async () => {
+		const primary = evacuee(0);
+		setHousehold([primary], primary);
+		mockIssueQr.mockRejectedValueOnce(new Error('CONFLICT'));
+		const results = await checkInSelectedMembers(shelterCode, primary._id, [primary._id]);
+		expect(results[0]).toMatchObject({ qr_issue_failed: true });
+		expect(results[0].label).not.toHaveProperty('marker');
 	});
 });
 

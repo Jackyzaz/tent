@@ -30,6 +30,11 @@ export type {
 	HousingType
 } from './domain/people';
 
+// Domain — vulnerability marker (printed QR card)
+export { vulnerabilityMarker } from '$lib/utils/vulnerability-marker';
+export type { VulnerabilityMarker } from '$lib/utils/vulnerability-marker';
+export { isQrCardStale } from './domain/qr-card-staleness';
+
 // Domain — input schemas + factories + transitions + guards
 export {
 	CARD_NUMBER_MAX_LENGTH,
@@ -220,6 +225,7 @@ export {
 } from './application/evacuee-qr-check';
 export { issueQrPayloads, type IssuedQrPayloads } from './application/evacuee-qr-issue';
 export { readEvacueeQrPrints } from './data/evacuee-qr.remote';
+export { useEvacueeQrPrints } from './application/evacuee-qr-prints';
 
 export {
 	extractScanLookupToken,
@@ -328,6 +334,8 @@ export {
 	type RegistrationConsent,
 	type RegistrationConsentConfig
 } from './domain/unified-registration';
+
+export { PUBLIC_PRE_REGISTER_DRAFT_KEY } from './domain/registration-draft';
 
 export {
 	defaultBirthCalendar,
@@ -439,6 +447,17 @@ export {
 export { default as UnifiedRegistrationForm } from './ui/registration/unified-registration-form.svelte';
 export type { ThaiDAutofillProfile, ThaiDAutofillAddress } from './domain/thaid-profile';
 export { stripThaiTitle } from './domain/thaid-profile';
+export {
+	scannerCardSchema,
+	scannerCardPhotoSchema,
+	cardToUnifiedMember,
+	applyScannedCard,
+	digitsOnly,
+	type ScannerCard,
+	type ScannerCardPhoto,
+	type ScannedCardPlacement,
+	type ScannedCardDuplicate
+} from './domain/scanner-card';
 export { default as ThaidActionButton } from './ui/registration/thaid-action-button.svelte';
 export { default as ThaidMemberScanDialog } from './ui/registration/thaid-member-scan-dialog.svelte';
 export { default as UnifiedRegistrationSummaryCard } from './ui/registration/unified-registration-summary-card.svelte';

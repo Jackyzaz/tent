@@ -102,6 +102,15 @@ export {
 	formatUnit
 } from './domain/unit-of-measure';
 
+export {
+	WHOLE_QTY_MESSAGE,
+	resolveUnitDimension,
+	requiresWholeQty,
+	qtyInputStep,
+	wholeQtyError,
+	type UnitDimensionSource
+} from './domain/unit-quantity';
+
 // Domain — quick-create, similarity, barcode, permissions
 export { findSimilarItems, missingOptionalFields } from './domain/item-similarity';
 export {
@@ -180,6 +189,8 @@ export {
 	useDeleteUnitOfMeasure
 } from './application/queries';
 
+export { useUnitDimensionResolver } from './application/use-unit-dimension-resolver.svelte';
+
 // UI — feature components
 export { default as CatalogFormPage } from './ui/catalog-form-page.svelte';
 export { default as CatalogWorkspace } from './ui/catalog-workspace.svelte';
@@ -190,6 +201,7 @@ export { default as QuickCreateItemDialog } from './ui/quick-create-item-dialog.
 export { default as QuickCreateItem } from './ui/quick-create-item.svelte';
 export { default as QuickCreateItemSheet } from './ui/quick-create-item-sheet.svelte';
 export { default as RecipeForm } from './ui/recipe-form.svelte';
+export { default as RecipeTab } from './ui/recipe-tab.svelte';
 export { default as MasterBadge } from './ui/master/master-badge.svelte';
 export { default as MasterFilterBar } from './ui/master/master-filter-bar.svelte';
 export { default as MasterPager } from './ui/master/master-pager.svelte';

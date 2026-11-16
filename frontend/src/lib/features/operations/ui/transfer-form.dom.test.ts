@@ -12,18 +12,37 @@ const destinations: { current: DestinationsState } = {
 	current: { data: undefined, isSuccess: false, isError: false }
 };
 
+const BOTTLE = {
+	_id: 'item:water',
+	name: 'น้ำดื่ม',
+	unit: 'ขวด',
+	base_unit: 'ขวด',
+	conversions: []
+};
+const stockItems = vi.hoisted(() => ({ current: [] as unknown[] }));
+
 vi.mock('../application/queries', () => ({
 	useCreateTransfer: () => ({ mutateAsync: vi.fn(), isPending: false }),
-	useStockBalance: () => ({ data: new Map<string, string>() }),
+	useStockBalance: () => ({ data: new Map([['item:water', '10']]) }),
 	useTransferDestinations: () => destinations.current
 }));
 vi.mock('../application/use-stock-form-items.svelte', () => ({
-	useStockFormItems: () => ({ items: [] })
+	useStockFormItems: () => ({
+		get items() {
+			return stockItems.current;
+		}
+	})
 }));
-vi.mock('$lib/features/catalog', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/features/catalog')>()),
-	useUnitsOfMeasure: () => ({ data: [] })
-}));
+vi.mock('$lib/features/catalog', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/features/catalog')>();
+	return {
+		...actual,
+		useUnitsOfMeasure: () => ({ data: [] }),
+		useUnitDimensionResolver: () => ({
+			resolve: (unit: string) => actual.resolveUnitDimension(unit)
+		})
+	};
+});
 vi.mock('$lib/db/shelter', () => ({ getShelterCode: () => 'SH001' }));
 vi.mock('$app/navigation', () => ({
 	goto: vi.fn(),
@@ -60,6 +79,7 @@ const destinationTrigger = () =>
 	document.body.querySelector('[data-select-trigger], [data-slot="select-trigger"]') as HTMLElement;
 
 afterEach(() => {
+	stockItems.current = [];
 	if (instance) unmount(instance);
 	instance = null;
 	document.body.innerHTML = '';
@@ -99,5 +119,112 @@ describe('transfer form destinations (#570)', () => {
 		expect(document.body.textContent).not.toContain('ยังไม่มีศูนย์อื่นในระบบให้โอนไป');
 		expect(destinationTrigger().hasAttribute('disabled')).toBe(false);
 		expect(destinationTrigger().dataset.disabled).toBeUndefined();
+	});
+});
+
+describe('transfer form whole numbers for count units (#805)', () => {
+	const tick3 = async () => {
+		for (let i = 0; i < 3; i++) {
+			flushSync();
+			await tick();
+		}
+	};
+	const qtyInput = () => document.querySelector<HTMLInputElement>('input[type="number"]')!;
+
+	async function pickBottles() {
+		stockItems.current = [BOTTLE];
+		await render({
+			data: [{ code: 'SH002', name: 'ศูนย์สอง' }],
+			isSuccess: true,
+			isError: false
+		});
+		const input = document.querySelector<HTMLInputElement>('input[role="combobox"]')!;
+		const trigger = input.parentElement!.querySelector<HTMLElement>('button[aria-haspopup]')!;
+		trigger.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+		trigger.click();
+		await tick3();
+		const option = [...document.body.querySelectorAll<HTMLElement>('[role="option"]')].find((o) =>
+			o.textContent?.includes('น้ำดื่ม')
+		)!;
+		option.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0 }));
+		option.click();
+		await tick3();
+	}
+
+	async function type(value: string) {
+		qtyInput().value = value;
+		qtyInput().dispatchEvent(new Event('input', { bubbles: true }));
+		await tick3();
+	}
+
+	it('flags a fractional quantity at once; the request button follows the destination rule', async () => {
+		await pickBottles();
+		expect(qtyInput().step).toBe('1');
+
+		await type('1.5');
+		expect(document.body.textContent).toContain('หน่วยนับต้องเป็นจำนวนเต็ม');
+		expect(qtyInput().getAttribute('aria-invalid')).toBe('true');
+		expect(submitButton().disabled).toBe(true);
+
+		await type('2');
+		expect(document.body.textContent).not.toContain('หน่วยนับต้องเป็นจำนวนเต็ม');
+		expect(submitButton().disabled).toBe(false);
+	});
+});
+
+describe('transfer form quantity input (CR-038)', () => {
+	const QTY_HINT = 'จำนวนต้องมากกว่า 0 ทศนิยมไม่เกิน 4 ตำแหน่ง';
+	const qtyInput = () => document.querySelector<HTMLInputElement>('input[type="number"]')!;
+
+	async function settle() {
+		for (let i = 0; i < 3; i++) {
+			flushSync();
+			await tick();
+		}
+	}
+
+	async function pickBottles() {
+		stockItems.current = [BOTTLE];
+		await render({ data: [{ code: 'SH002', name: 'ศูนย์สอง' }], isSuccess: true, isError: false });
+		const input = document.querySelector<HTMLInputElement>('input[role="combobox"]')!;
+		const trigger = input.parentElement!.querySelector<HTMLElement>('button[aria-haspopup]')!;
+		trigger.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+		trigger.click();
+		await settle();
+		const option = [...document.body.querySelectorAll<HTMLElement>('[role="option"]')].find((o) =>
+			o.textContent?.includes('น้ำดื่ม')
+		)!;
+		option.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0 }));
+		option.click();
+		await settle();
+	}
+
+	async function type(value: string) {
+		qtyInput().value = value;
+		qtyInput().dispatchEvent(new Event('input', { bubbles: true }));
+		await settle();
+	}
+
+	it.each(['1e3', '1.23456', '0', '1000000000000000'])(
+		'refuses %s with the decimal hint and keeps the request button off',
+		async (raw) => {
+			await pickBottles();
+			await type(raw);
+			expect(document.body.textContent).toContain(QTY_HINT);
+			expect(qtyInput().getAttribute('aria-invalid')).toBe('true');
+			expect(submitButton().disabled).toBe(true);
+		}
+	);
+
+	it('explains a quantity the number input cannot parse, such as "1e"', async () => {
+		await pickBottles();
+		Object.defineProperty(qtyInput(), 'validity', {
+			configurable: true,
+			value: { badInput: true }
+		});
+		await type('');
+
+		expect(document.body.textContent).toContain(QTY_HINT);
+		expect(submitButton().disabled).toBe(true);
 	});
 });

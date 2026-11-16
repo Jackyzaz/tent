@@ -16,6 +16,7 @@ import {
 } from '$lib/features/kiosk/server/kiosk-register.server';
 import { toLabelIdentity } from '$lib/features/kiosk/server/kiosk-check-in.server';
 import { issueEvacueeQr } from '$lib/server/evacuee-qr-service';
+import type { VulnerabilityMarker } from '$lib/utils/vulnerability-marker';
 import { isKioskThaidCheckInAllowed } from '$lib/features/kiosk/server/kiosk-thaid-gate.server';
 import {
 	consumeKioskSession,
@@ -29,6 +30,7 @@ import {
 	ScannerAuthError,
 	ScannerDependencyError
 } from '$lib/server/scanners/device-credentials';
+import { isKioskClosed, kioskClosedResponse } from '$lib/server/scanners/kiosk-closed';
 
 export const prerender = false;
 const noStoreHeaders = { 'cache-control': 'no-store', pragma: 'no-cache' };
@@ -52,6 +54,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			request.headers.get('x-device-secret') ?? '',
 			scannerServerRepository
 		);
+		if (isKioskClosed(principal)) return kioskClosedResponse();
 		const body = await request.json().catch(() => null);
 		const parsed = kioskWalkInRegistrationInputSchema.safeParse(body);
 		if (!parsed.success && isStaleKioskConsent(body)) {
@@ -160,15 +163,16 @@ export const POST: RequestHandler = async ({ request }) => {
 		// CR-233: a freshly issued Person QR (never the bare evacuee id). The evacuee is already
 		// created, so a failed entry only drops the payload and flags it; the kiosk must not print.
 		let qrPayload: string | null = null;
+		let marker: VulnerabilityMarker | null | undefined;
 		try {
-			qrPayload = (
-				await issueEvacueeQr({
-					shelter_code: principal.shelter_code,
-					evacuee_id: evacuee._id,
-					source: 'kiosk_checkin',
-					printed_by: `kiosk:${principal.device_id}`
-				})
-			).qr_payload;
+			const issued = await issueEvacueeQr({
+				shelter_code: principal.shelter_code,
+				evacuee_id: evacuee._id,
+				source: 'kiosk_checkin',
+				printed_by: `kiosk:${principal.device_id}`
+			});
+			qrPayload = issued.qr_payload;
+			marker = issued.marker;
 		} catch {
 			qrPayload = null;
 		}
@@ -178,7 +182,8 @@ export const POST: RequestHandler = async ({ request }) => {
 				evacuee_id: evacuee._id,
 				qr_payload: qrPayload,
 				...(qrPayload === null ? { qr_issue_failed: true } : {}),
-				label: toLabelIdentity(evacuee),
+				// #1301: the marker the entry was logged with, so the printed card matches the log.
+				label: { ...toLabelIdentity(evacuee), ...(marker === undefined ? {} : { marker }) },
 				consent_ref: evacuee.consent.ref,
 				consent_mode: evacuee.consent.mode
 			},

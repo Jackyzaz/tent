@@ -7,11 +7,7 @@ import {
 	isReprintableStatus
 } from '../domain/check-in-status';
 import { normalizeKioskPhone, phoneVariants } from '../domain/phone';
-import {
-	groupPhoneMatches,
-	KIOSK_PHONE_MAX_CANDIDATES,
-	isPhoneMatchEligible
-} from '../domain/phone-match';
+import { groupPhoneMatches, isPhoneMatchEligible } from '../domain/phone-match';
 import { adminFetch } from '$lib/server/couch-admin';
 import { shelterDbName } from '$lib/server/shelter-access-design';
 import { maskLastName } from '$lib/utils/mask';
@@ -34,6 +30,7 @@ import {
 import { writeKioskStationLogs } from './kiosk-station-log.server';
 import { evaluatePersonQr, parsePersonQr } from '$lib/utils/evacuee-qr';
 import { getEvacueeQrPrints, issueEvacueeQr } from '$lib/server/evacuee-qr-service';
+import type { VulnerabilityMarker } from '$lib/utils/vulnerability-marker';
 
 const ULID = '[0-7][0-9A-HJKMNP-TV-Z]{25}';
 export const evacueeIdSchema = z.string().regex(new RegExp(`^evacuee:${ULID}$`, 'i'));
@@ -153,6 +150,11 @@ export interface KioskEvacueeSummary {
 export type KioskLabelIdentity = {
 	name: string;
 	phone: string | null;
+	/**
+	 * Vulnerability marker the issued QR was logged with (#1301), so the printed card matches the
+	 * log. Only with a `qr_payload`; the marker colour only, never group names or screening details.
+	 */
+	marker?: VulnerabilityMarker | null;
 	/** Emergency contact phone printed under the zone (CR-151 §16); absent when there is none. */
 	emergency_phone?: string;
 };
@@ -320,6 +322,22 @@ export async function getById(dbName: string, id: string): Promise<EvacueeDoc | 
 	}
 }
 
+/** Max concurrent per-household `_find` calls when expanding phone candidates. */
+export const HOUSEHOLD_EXPAND_BATCH_SIZE = 8;
+
+/** Runs `fn` over `items` in sequential batches so CouchDB never sees an unbounded burst. */
+async function mapInBatches<T, R>(
+	items: readonly T[],
+	batchSize: number,
+	fn: (item: T) => Promise<R>
+): Promise<R[]> {
+	const results: R[] = [];
+	for (let i = 0; i < items.length; i += batchSize) {
+		results.push(...(await Promise.all(items.slice(i, i + batchSize).map(fn))));
+	}
+	return results;
+}
+
 async function lookupByPhone(
 	shelterCode: string,
 	rawPhone: string,
@@ -375,7 +393,7 @@ async function lookupByPhone(
 		if (truncated) break;
 	}
 	const docs = [...docsById.values()];
-	// A capped or malformed page sequence cannot prove there are five or fewer groups.
+	// A capped or malformed page sequence cannot prove the match list is complete.
 	// Fail closed instead of returning an incomplete household picker.
 	if (truncated) return { kind: 'too_many' };
 	const householdIds = [
@@ -401,7 +419,6 @@ async function lookupByPhone(
 	}
 
 	const groups = groupPhoneMatches(docs, shelterCode, headByHousehold);
-	if (groups.length > KIOSK_PHONE_MAX_CANDIDATES) return { kind: 'too_many' };
 
 	const normalizedPrimaryId = primaryId
 		? `evacuee:${primaryId.slice('evacuee:'.length).toUpperCase()}`
@@ -423,8 +440,10 @@ async function lookupByPhone(
 				)
 			];
 			// Equality queries keep the (type, household_id) index usable.
-			const memberResults = await Promise.all(
-				householdIds.map((householdId) =>
+			const memberResults = await mapInBatches(
+				householdIds,
+				HOUSEHOLD_EXPAND_BATCH_SIZE,
+				(householdId) =>
 					adminFetch<{ docs?: unknown[] }>(`/${dbName}/_find`, {
 						method: 'POST',
 						body: JSON.stringify({
@@ -436,7 +455,6 @@ async function lookupByPhone(
 							limit: 100
 						})
 					})
-				)
 			);
 			const expanded = memberResults.flatMap((result) => (result.docs ?? []).filter(isEvacueeDoc));
 			const candidates = groups.map((candidate) => {
@@ -667,8 +685,13 @@ function notEligible(evacueeIds: string[]): KioskCheckInMemberResult[] {
 async function issueMemberQr(
 	shelterCode: string,
 	evacueeId: string,
-	deviceId: string | undefined
-): Promise<{ qr_payload: string } | { qr_issue_failed: true }> {
+	deviceId: string | undefined,
+	doc: Parameters<typeof toLabelIdentity>[0]
+): Promise<
+	| { qr_payload: string; label: KioskLabelIdentity }
+	| { qr_issue_failed: true; label: KioskLabelIdentity }
+> {
+	const identity = toLabelIdentity(doc);
 	try {
 		const issued = await issueEvacueeQr({
 			shelter_code: shelterCode,
@@ -676,9 +699,9 @@ async function issueMemberQr(
 			source: 'kiosk_checkin',
 			printed_by: `kiosk:${deviceId ?? 'unknown'}`
 		});
-		return { qr_payload: issued.qr_payload };
+		return { qr_payload: issued.qr_payload, label: { ...identity, marker: issued.marker } };
 	} catch {
-		return { qr_issue_failed: true };
+		return { qr_issue_failed: true, label: identity };
 	}
 }
 
@@ -789,10 +812,7 @@ export async function checkInSelectedMembers(
 				status: isAlreadyCheckedInStatus(stayStatus) ? 'already_checked_in' : 'not_eligible',
 				stay_status: stayStatus,
 				...(stayStatus === 'arriving'
-					? {
-							...(await issueMemberQr(shelterCode, evacueeId, options.deviceId)),
-							label: toLabelIdentity(member)
-						}
+					? await issueMemberQr(shelterCode, evacueeId, options.deviceId, member)
 					: {})
 			});
 			continue;
@@ -817,8 +837,7 @@ export async function checkInSelectedMembers(
 				evacuee_id: evacueeId,
 				status: 'checked_in',
 				stay_status: 'arriving',
-				...(await issueMemberQr(shelterCode, evacueeId, options.deviceId)),
-				label: toLabelIdentity(member)
+				...(await issueMemberQr(shelterCode, evacueeId, options.deviceId, member))
 			});
 		} catch {
 			const latest = await getById(dbName, member._id).catch(() => null);
@@ -829,10 +848,7 @@ export async function checkInSelectedMembers(
 					status: 'already_checked_in',
 					stay_status: stayStatus,
 					...(stayStatus === 'arriving'
-						? {
-								...(await issueMemberQr(shelterCode, evacueeId, options.deviceId)),
-								label: toLabelIdentity(latest)
-							}
+						? await issueMemberQr(shelterCode, evacueeId, options.deviceId, latest)
 						: {})
 				});
 			} else {

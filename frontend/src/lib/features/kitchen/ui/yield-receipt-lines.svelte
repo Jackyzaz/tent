@@ -6,15 +6,22 @@
 	import {
 		formatUnit,
 		itemMasterUnit,
+		qtyInputStep,
 		systemCategoryId,
 		useItemMasters,
+		useUnitDimensionResolver,
+		wholeQtyError,
 		useUnitsOfMeasure
 	} from '$lib/features/catalog';
 	import { StoragePointSelect, type StoragePointRef } from '$lib/features/operations';
 	import { getShelterCode } from '$lib/db/shelter';
 	import { ulid } from '$lib/db/ulid';
 	import { qtyStrCoerceSchema } from '$lib/utils/qty';
-	import { yieldTotal, type YieldDraftLine } from '../domain/kitchen-yield-receipt';
+	import {
+		yieldTotal,
+		yieldTotalMismatch,
+		type YieldDraftLine
+	} from '../domain/kitchen-yield-receipt';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
@@ -27,12 +34,15 @@
 	 */
 	let {
 		lines = $bindable([]),
+		onvaliditychange,
 		points,
 		expectedTotal,
 		disabled = false,
 		oncreatenew
 	}: {
 		lines: YieldDraftLine[];
+		/** Reports whether any line breaks the whole-number rule of its item's unit. */
+		onvaliditychange?: (invalid: boolean) => void;
 		points: readonly StoragePointRef[];
 		/** The kitchen's recorded yield, shown next to the running total. */
 		expectedTotal?: number | string;
@@ -43,6 +53,7 @@
 
 	const itemMasters = useItemMasters(() => getShelterCode());
 	const units = useUnitsOfMeasure();
+	const dimensions = useUnitDimensionResolver();
 
 	const readyMeals = $derived(
 		(itemMasters.data ?? []).filter(
@@ -55,6 +66,19 @@
 		const item = readyMeals.find((i) => i._id === itemId);
 		return item ? formatUnit(itemMasterUnit(item), units.data) : '';
 	}
+
+	function dimensionOf(itemId: string) {
+		const item = readyMeals.find((i) => i._id === itemId);
+		return item ? dimensions.resolve(itemMasterUnit(item)) : undefined;
+	}
+
+	const qtyErrors = $derived(
+		new Map(lines.map((line) => [line.key, wholeQtyError(line.qty, dimensionOf(line.item_id))]))
+	);
+
+	$effect(() => {
+		onvaliditychange?.([...qtyErrors.values()].some(Boolean));
+	});
 
 	function addLine() {
 		lines.push({ key: ulid(), item_id: '', qty: '', storage_point_id: '' });
@@ -73,9 +97,7 @@
 			})
 		)
 	);
-	const mismatch = $derived(
-		expectedTotal !== undefined && expectedTotal !== '' && Number(total) !== Number(expectedTotal)
-	);
+	const mismatch = $derived(yieldTotalMismatch(total, expectedTotal));
 </script>
 
 <div class="space-y-3">
@@ -144,12 +166,16 @@
 					<Input
 						id={`yield-qty-${line.key}`}
 						type="text"
-						inputmode="decimal"
+						inputmode={qtyInputStep(dimensionOf(line.item_id)) === '1' ? 'numeric' : 'decimal'}
 						placeholder="0"
 						bind:value={line.qty}
+						aria-invalid={!!qtyErrors.get(line.key)}
 						{disabled}
 						class="h-11 tabular-nums sm:h-10"
 					/>
+					{#if qtyErrors.get(line.key)}
+						<p class="text-xs font-semibold text-red-600">{qtyErrors.get(line.key)}</p>
+					{/if}
 				</div>
 				<div class="space-y-1.5">
 					<Label class="text-sm font-semibold text-slate-700">สถานที่จัดเก็บ</Label>

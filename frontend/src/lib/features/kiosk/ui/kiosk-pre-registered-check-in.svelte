@@ -35,6 +35,8 @@
 		type KioskEvacueeSummary,
 		type KioskLookupResponse
 	} from '../data/kiosk-check-in.api';
+	import { isKioskClosedError } from '../data/kiosk-closed';
+	import { goToKioskClosed } from '../application/kiosk-navigation';
 	import {
 		prepareKioskQrImage,
 		printKioskQrLabels,
@@ -262,6 +264,7 @@
 			selectedIds = initialSelection(gate.source, selectableMembers);
 		} catch (error) {
 			if (generation !== lookupGeneration) return;
+			if (endIfClosed(error)) return;
 			if (error instanceof KioskRequestError) {
 				lookupErrorCode = error.code;
 				lookupError = error.message;
@@ -273,6 +276,16 @@
 		} finally {
 			if (generation === lookupGeneration) isLookingUp = false;
 		}
+	}
+
+	/**
+	 * An admin closed the kiosk: the server refused this call, so show the closed page instead of an
+	 * error (work the server already accepted keeps printing; only this call is cut).
+	 */
+	function endIfClosed(error: unknown): boolean {
+		if (!isKioskClosedError(error)) return false;
+		goToKioskClosed(contextQuery);
+		return true;
 	}
 
 	function centerMatchesFor(serverCode: string): boolean {
@@ -331,6 +344,7 @@
 			}
 			await prepareQrImages(results);
 		} catch (error) {
+			if (endIfClosed(error)) return;
 			if (isThaidGate && isThaidSessionError(error)) {
 				// The verified session is gone or the method was switched off: only a new scan can go on.
 				lookup = null;
@@ -396,11 +410,16 @@
 		try {
 			for (const item of items) {
 				if (!item.qr_payload) continue;
-				if (nextImages[item.evacuee_id] && qrImagePayloads[item.evacuee_id] === item.qr_payload) {
+				// The level band shrinks the QR, so a changed marker needs a fresh image too.
+				const imageKey = `${item.qr_payload}|${item.label?.marker ?? ''}`;
+				if (nextImages[item.evacuee_id] && qrImagePayloads[item.evacuee_id] === imageKey) {
 					continue;
 				}
-				nextImages[item.evacuee_id] = await prepareKioskQrImage(item.qr_payload);
-				qrImagePayloads[item.evacuee_id] = item.qr_payload;
+				nextImages[item.evacuee_id] = await prepareKioskQrImage(
+					item.qr_payload,
+					item.label?.marker
+				);
+				qrImagePayloads[item.evacuee_id] = imageKey;
 			}
 			if (generation !== undefined && generation !== lookupGeneration) return false;
 			qrImages = nextImages;
@@ -428,6 +447,7 @@
 			results = mergeCheckInResults(results, response.members);
 			return true;
 		} catch (error) {
+			if (endIfClosed(error)) return false;
 			if (error instanceof KioskPartialCheckInError) {
 				results = mergeCheckInResults(results, error.result.members);
 			}
@@ -518,7 +538,8 @@
 				qrSrc: qr.src,
 				name: labelName(result, person),
 				emergencyPhone: result.label?.emergency_phone,
-				checkedCount: KIOSK_CHECK_IN_TICKS
+				checkedCount: KIOSK_CHECK_IN_TICKS,
+				marker: result.label?.marker
 			};
 		});
 	}
@@ -1055,7 +1076,8 @@
 							lookup?.members.find((member) => member.evacuee_id === result.evacuee_id)
 						),
 						emergencyPhone: result.label?.emergency_phone,
-						checkedCount: KIOSK_CHECK_IN_TICKS
+						checkedCount: KIOSK_CHECK_IN_TICKS,
+						marker: result.label?.marker
 					}))}
 			/>
 		{/if}

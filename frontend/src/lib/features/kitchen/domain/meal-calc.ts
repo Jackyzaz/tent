@@ -1,5 +1,13 @@
 import Decimal from 'decimal.js';
-import { persistQty, qtyGte, qtyLte, roundQty, subQty } from '$lib/utils/qty';
+import {
+	parseQty,
+	persistQty,
+	qtyGte,
+	qtyLte,
+	roundQty,
+	subQty,
+	type QtyValue
+} from '$lib/utils/qty';
 import type { Recipe, ItemMaster } from '$lib/features/catalog';
 import type { SupplyItem } from '$lib/features/supply';
 import type {
@@ -63,7 +71,7 @@ export function calculateMealIngredients(
 		throw new Error('calculateMealIngredients: riceGPerMeal must be > 0');
 	}
 
-	const riceGrams = Math.ceil(headcount.total * riceGPerMeal);
+	const riceGrams = new Decimal(headcount.total).mul(riceGPerMeal).ceil().toNumber();
 	const recipes: MealPlanRecipe[] = [{ recipe_id: RICE_RECIPE_ID, planned_qty: riceGrams }];
 
 	return {
@@ -143,18 +151,21 @@ export function calculateMealIngredientsFromRecipe(
 }
 
 /**
- * Scales one recipe ingredient quantity (`qty_str`) to a portion count, returned as a qty string
- * (4 dp, ROUND_HALF_UP). A recipe base under 1 portion is treated as 1. `portions` comes straight
- * from a number input, so an emptied box (`null`) scales to 0.
+ * Scales one recipe ingredient quantity (`qty_str`) to a portion count, as a qty string. A count
+ * unit (`wholeUnit`) rounds up to a whole number; any other unit keeps 4 dp, ROUND_HALF_UP.
+ * A recipe base under 1 portion is treated as 1. `portions` comes straight from a number input,
+ * so an emptied box (`null`) scales to 0.
  */
 export function scaleRecipeIngredientQty(
 	quantity: string,
 	standardPortions: string,
-	portions: number | null
+	portions: number | null,
+	wholeUnit: boolean
 ): string {
 	if (portions == null) return '0';
 	const base = Decimal.max(new Decimal(standardPortions || 1), 1);
-	return persistQty(new Decimal(quantity || 0).mul(portions).div(base));
+	const scaled = new Decimal(quantity || 0).mul(portions).div(base);
+	return persistQty(wholeUnit ? scaled.ceil() : scaled);
 }
 
 export interface CustomIngredientInput {
@@ -183,7 +194,7 @@ export function calculateMealIngredientsFromCustom(
 
 	const recipes: MealPlanRecipe[] = items.map((i) => ({
 		recipe_id: i.item_id,
-		planned_qty: Math.ceil(headcount.total * i.qty_per_person),
+		planned_qty: new Decimal(headcount.total).mul(i.qty_per_person).ceil().toNumber(),
 		unit: i.unit
 	}));
 
@@ -195,6 +206,15 @@ export function calculateMealIngredientsFromCustom(
 			headcount_as_of: headcountAsOf
 		}
 	};
+}
+
+/**
+ * How much of `plannedQty` (recipe unit) the on-hand stock (`qty_str`, stock unit) cannot cover.
+ * Never negative; computed in Decimal so a stock that exactly covers the plan yields 0.
+ */
+export function shortfallQty(plannedQty: number, onHand: QtyValue, recipePerStockUnit = 1): number {
+	const shortfall = new Decimal(plannedQty).minus(parseQty(onHand).times(recipePerStockUnit));
+	return shortfall.gt(0) ? shortfall.toNumber() : 0;
 }
 
 /**
