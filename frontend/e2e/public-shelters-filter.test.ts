@@ -37,8 +37,12 @@ import { publicShelter, teardownShelter } from './helpers/public-cleanup';
 import { createShelterViaUi } from './helpers/staff-ui';
 
 const FIXTURE = sheltersFixture();
-/** GPS fix + filter commit + the `/shelters` load it triggers, on a cold preview server. */
-const GPS_URL_TIMEOUT_MS = 15_000;
+/**
+ * GPS fix + filter commit + the `/shelters` load it triggers, on a cold preview server. The first
+ * load renders every shelter (736 on staging) before the radius applies, which blocks the main
+ * thread long enough on the CPU-starved CI agent to push the URL commit past 15 s.
+ */
+const GPS_URL_TIMEOUT_MS = 45_000;
 const { marker: MARKER, hostNear: HOST_NEAR, evacFar: EVAC_FAR } = FIXTURE;
 const USER_LOCATION = { latitude: 7.0086, longitude: 100.4968 };
 
@@ -119,7 +123,8 @@ test.describe(
 		});
 
 		test('filters the list by shelter name', async ({ page }) => {
-			test.setTimeout(75_000); // outlasts the 60 s projection wait below
+			// GPS commit + the 60 s projection wait below + margin
+			test.setTimeout(GPS_URL_TIMEOUT_MS + 60_000 + 15_000);
 			await page.goto('/shelters');
 			// First visit: GPS → URL commit → page load re-runs before the URL changes (~3 s locally).
 			await expect(page).toHaveURL(/distance=5/, { timeout: GPS_URL_TIMEOUT_MS });
@@ -141,6 +146,8 @@ test.describe(
 		});
 
 		test('widens and narrows the GPS radius', async ({ page }) => {
+			// GPS commit + radius reloads of the full list
+			test.setTimeout(GPS_URL_TIMEOUT_MS + 60_000);
 			await page.goto(`/shelters?q=${encodeURIComponent(MARKER)}`);
 			await expect(page).toHaveURL(/distance=5/, { timeout: GPS_URL_TIMEOUT_MS });
 			await expect(page.getByRole('heading', { name: MARKER })).toHaveCount(1);
