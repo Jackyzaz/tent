@@ -124,6 +124,7 @@ flowchart LR
    _(จะได้ IP เช่น `192.168.1.105`)_
 
 2. รีโมตจากคอมพิวเตอร์เครื่องอื่นผ่าน Terminal หรือ VS Code Remote SSH:
+
    ```bash
    ssh pi@192.168.1.105
    ```
@@ -507,13 +508,13 @@ git push -f origin kiosk-stable
 
 **ไฟล์ที่เกี่ยวข้อง**
 
-| ไฟล์ | หน้าที่ |
-| --- | --- |
-| `kiosk_updater.py` | ตัว updater ใช้แค่ stdlib (ห้าม import package จาก venv เพราะต้องรันได้แม้ venv พังอยู่) |
-| `start_kiosk.sh` ข้อ 6.0 | เรียก updater ครั้งเดียวก่อน supervisor loop ถ้า exit code เป็น `10` จะ re-exec ตัวเอง |
-| `tests/test_kiosk_updater.py` | test กับ git repo จริงใน temp dir (origin + clone ของตู้) |
-| `.git/kiosk-update/` บนตู้ | state ของ updater: `pending` (marker) และ `pip-freeze.txt` (snapshot) |
-| `~/.local/state/smart-shelter-kiosk/updater.log` บนตู้ | log ของ updater ที่อยู่ข้าม reboot |
+| ไฟล์                                                   | หน้าที่                                                                                  |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| `kiosk_updater.py`                                     | ตัว updater ใช้แค่ stdlib (ห้าม import package จาก venv เพราะต้องรันได้แม้ venv พังอยู่) |
+| `start_kiosk.sh` ข้อ 6.0                               | เรียก updater ครั้งเดียวก่อน supervisor loop ถ้า exit code เป็น `10` จะ re-exec ตัวเอง   |
+| `tests/test_kiosk_updater.py`                          | test กับ git repo จริงใน temp dir (origin + clone ของตู้)                                |
+| `.git/kiosk-update/` บนตู้                             | state ของ updater: `pending` (marker) และ `pip-freeze.txt` (snapshot)                    |
+| `~/.local/state/smart-shelter-kiosk/updater.log` บนตู้ | log ของ updater ที่อยู่ข้าม reboot                                                       |
 
 **ลำดับการทำงานของ `update_on_boot()`**
 
@@ -531,18 +532,18 @@ git push -f origin kiosk-stable
 
 **ผลลัพธ์ (outcome) ที่เขียนลง log**
 
-| outcome | ความหมาย | HEAD |
-| --- | --- | --- |
-| `disabled` | ตู้ไม่ได้อยู่บน `main` | ไม่เปลี่ยน |
-| `offline` | fetch ไม่ได้ และไม่มีงานค้าง | ไม่เปลี่ยน |
-| `up-to-date` | อยู่ที่ `kiosk-stable` แล้ว | ไม่เปลี่ยน |
-| `untrusted` | tag ชี้ไป commit ที่ไม่อยู่บน `origin/main` | ไม่เปลี่ยน |
-| `diverged` | มี commit บนตู้ที่ยังไม่อยู่บน `origin/main` | ไม่เปลี่ยน |
-| `dirty` | มีไฟล์ tracked ถูกแก้ หรือ release จะทับไฟล์ untracked | ไม่เปลี่ยน |
-| `updated` | ย้ายไปเวอร์ชันใหม่และติดตั้งครบ | เปลี่ยน → re-exec |
-| `rolled-back` | ขั้นติดตั้งล้ม ย้อนกลับเวอร์ชันเดิมแล้ว (ถ้า undo ล้ม package อาจยังปนอยู่ และ marker ถูกเก็บไว้) | กลับเป็นเดิม |
-| `restored` | tag ถูกย้ายกลับมาที่ base ระหว่างที่งานค้าง ย้อนทุกขั้นที่ release นั้นรันแล้ว | เวอร์ชันเดิม |
-| `skipped: …` | error ที่ไม่คาดไว้ (`main()` จับไว้) ตู้บูตต่อตามปกติ | ตามจริง |
+| outcome       | ความหมาย                                                                                          | HEAD              |
+| ------------- | ------------------------------------------------------------------------------------------------- | ----------------- |
+| `disabled`    | ตู้ไม่ได้อยู่บน `main`                                                                            | ไม่เปลี่ยน        |
+| `offline`     | fetch ไม่ได้ และไม่มีงานค้าง                                                                      | ไม่เปลี่ยน        |
+| `up-to-date`  | อยู่ที่ `kiosk-stable` แล้ว                                                                       | ไม่เปลี่ยน        |
+| `untrusted`   | tag ชี้ไป commit ที่ไม่อยู่บน `origin/main`                                                       | ไม่เปลี่ยน        |
+| `diverged`    | มี commit บนตู้ที่ยังไม่อยู่บน `origin/main`                                                      | ไม่เปลี่ยน        |
+| `dirty`       | มีไฟล์ tracked ถูกแก้ หรือ release จะทับไฟล์ untracked                                            | ไม่เปลี่ยน        |
+| `updated`     | ย้ายไปเวอร์ชันใหม่และติดตั้งครบ                                                                   | เปลี่ยน → re-exec |
+| `rolled-back` | ขั้นติดตั้งล้ม ย้อนกลับเวอร์ชันเดิมแล้ว (ถ้า undo ล้ม package อาจยังปนอยู่ และ marker ถูกเก็บไว้) | กลับเป็นเดิม      |
+| `restored`    | tag ถูกย้ายกลับมาที่ base ระหว่างที่งานค้าง ย้อนทุกขั้นที่ release นั้นรันแล้ว                    | เวอร์ชันเดิม      |
+| `skipped: …`  | error ที่ไม่คาดไว้ (`main()` จับไว้) ตู้บูตต่อตามปกติ                                             | ตามจริง           |
 
 **สิ่งที่ห้ามพังเวลาแก้โค้ดส่วนนี้**
 
@@ -888,10 +889,12 @@ user ของ kiosk ต้องรัน `kiosk/start_kiosk.sh` ได้ (scr
 1. **ต่อเครื่อง + ใส่ม้วน label:** ต่อ XP-365B เข้าพอร์ต USB ของ Pi แล้วเปิดเครื่อง → ใส่ม้วนให้ **ด้านเคลือบความร้อนหันขึ้นหาหัวพิมพ์** (ขูดด้วยเล็บต้องเกิดรอยดำ) → ปิดฝาจนล็อก
 2. **ตรวจโหมด + calibrate:** พิมพ์ self-test (กดปุ่ม FEED ค้างขณะเปิดเครื่อง) → ต้องอยู่ **label mode** → calibrate gap sensor ตามคู่มือที่มากับเครื่อง → กด FEED 1 ครั้งต้องป้อนออก 1 ดวงพอดีรอยฉีก
 3. **เตรียมไฟล์ driver:** ดาวน์โหลด `printer-driver-xprinter_3.13.55_all.deb` จาก [xprintertech.com](https://www.xprintertech.com/drivers-2.html) (ไฟล์ไม่อยู่ใน repo) แล้วคัดลอกไปที่ Pi และตรวจ checksum:
+
    ```bash
    sha256sum ~/printer-driver-xprinter_3.13.55_all.deb
    # ต้องได้ 2dc1d5d182ca7176c509ca07ce40040494d0c5c64eb646d2aa2dfee4c123e9ca
    ```
+
 4. **ติดตั้งและตั้งค่า:**
 
    ```bash
