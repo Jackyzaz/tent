@@ -493,18 +493,18 @@ sudo reboot                          # ให้สิทธิ์ group lp / pl
 ./setup_big_kiosk.sh --status --test-print   # + พิมพ์หน้าทดสอบ
 ```
 
-| ขั้น | ทำอะไร |
-| --- | --- |
-| 1 | ตรวจฮาร์ดแวร์: printer `28e9:5812`, QR `0461:4d81`, เครื่องอ่านบัตร `0483:4c43` |
-| 2 | `apt install` แพ็กเกจระบบ (ข้ามได้ด้วย `--skip-apt`) |
-| 3 | สร้าง `.venv` + `pip install -r requirements.txt` (ข้ามได้ด้วย `--skip-venv`) |
-| 4 | `.env`: เพิ่มเฉพาะค่าฮาร์ดแวร์ที่ยังไม่มี + `chmod 600` · **ไม่เขียน `TENT_BASE_URL` / `DEVICE_ID` / `DEVICE_SECRET`** — แจ้งให้กรอกเองจาก System Management |
-| 5 | เพิ่ม user เข้า group `lp` (printer) |
-| 6 | `./setup_card_reader.sh` (udev rule + group `plugdev`) |
-| 7 | ปิด `cups-browsed` (กัน printer ในเครือข่ายโผล่เข้ามาเอง) |
-| 8 | `./setup_autostart.sh` |
-| 9 | `./setup_chromium_policy.sh` (Chromium policy `TranslateEnabled: false` — ไม่ให้ bubble แปลภาษาเด้งมุมขวาบน) |
-| 10 | ปิด sleep/suspend ของระบบ · GNOME: ปิดจอดับ/ล็อกจอ · X11: `xset s off -dpms` ตอน login |
+| ขั้น | ทำอะไร                                                                                                                                                       |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1    | ตรวจฮาร์ดแวร์: printer `28e9:5812`, QR `0461:4d81`, เครื่องอ่านบัตร `0483:4c43`                                                                              |
+| 2    | `apt install` แพ็กเกจระบบ (ข้ามได้ด้วย `--skip-apt`)                                                                                                         |
+| 3    | สร้าง `.venv` + `pip install -r requirements.txt` (ข้ามได้ด้วย `--skip-venv`)                                                                                |
+| 4    | `.env`: เพิ่มเฉพาะค่าฮาร์ดแวร์ที่ยังไม่มี + `chmod 600` · **ไม่เขียน `TENT_BASE_URL` / `DEVICE_ID` / `DEVICE_SECRET`** — แจ้งให้กรอกเองจาก System Management |
+| 5    | เพิ่ม user เข้า group `lp` (printer)                                                                                                                         |
+| 6    | `./setup_card_reader.sh` (udev rule + group `plugdev`)                                                                                                       |
+| 7    | ปิด `cups-browsed` (กัน printer ในเครือข่ายโผล่เข้ามาเอง)                                                                                                    |
+| 8    | `./setup_autostart.sh`                                                                                                                                       |
+| 9    | `./setup_chromium_policy.sh` (Chromium policy `TranslateEnabled: false` — ไม่ให้ bubble แปลภาษาเด้งมุมขวาบน)                                                 |
+| 10   | ปิด sleep/suspend ของระบบ · GNOME: ปิดจอดับ/ล็อกจอ · X11: `xset s off -dpms` ตอน login                                                                       |
 
 ไม่ทำ: `setup_printer.sh` (XP-365B เท่านั้น) และการตั้งค่าในตัว printer (โหมด black mark ทำให้ตัดกระดาษ ~17 ซม./ใบ — ต้องตั้งที่ printer ตามคู่มือผู้ขาย)
 
@@ -533,12 +533,12 @@ sudo usermod -aG lp kiosk
 
 ### เครื่องพิมพ์ใบเสร็จ ESC/POS (ตู้ใหญ่)
 
-| key | ค่า | default |
-| :-- | :-- | :-- |
-| `PRINTER_BACKEND` | `cups` \| `escpos` | `cups` |
-| `PRINTER_USB_ID` | `VID:PID` (hex) — หา `/dev/usb/lpN` จาก sysfs **ทุกครั้งที่พิมพ์** เลยถอด-เสียบ USB แล้วเลข `lpN` เปลี่ยนก็พิมพ์ต่อได้ | — |
-| `PRINTER_DEVICE` | path ตรง ๆ (ใช้แทน `PRINTER_USB_ID` ถ้าตั้ง) | — |
-| `PRINTER_WIDTH_DOTS` | ความกว้างหัวพิมพ์ (80 มม. ≈ 576) | `576` |
+| key                  | ค่า                                                                                                                    | default |
+| :------------------- | :--------------------------------------------------------------------------------------------------------------------- | :------ |
+| `PRINTER_BACKEND`    | `cups` \| `escpos`                                                                                                     | `cups`  |
+| `PRINTER_USB_ID`     | `VID:PID` (hex) — หา `/dev/usb/lpN` จาก sysfs **ทุกครั้งที่พิมพ์** เลยถอด-เสียบ USB แล้วเลข `lpN` เปลี่ยนก็พิมพ์ต่อได้ | —       |
+| `PRINTER_DEVICE`     | path ตรง ๆ (ใช้แทน `PRINTER_USB_ID` ถ้าตั้ง)                                                                           | —       |
+| `PRINTER_WIDTH_DOTS` | ความกว้างหัวพิมพ์ (80 มม. ≈ 576)                                                                                       | `576`   |
 
 - ใช้ label PNG ขนาดเดิม (80×60 มม.) — ตัดขอบขาว, ย่อให้พอดีหัวพิมพ์ (ไม่ขยาย) จัดกึ่งกลาง แล้วส่ง `GS v 0` + ตัด `ESC i` ทันที (ไม่เลื่อนกระดาษก่อนตัด) ตรงเข้า device (ไม่ใช้ `GS V` เพราะ printer ตู้ใหญ่ผูก `GS V` กับ black mark → เลื่อนกระดาษ ~17 ซม. ต่อดวงบนม้วนธรรมดา) (ไม่ผ่าน CUPS, ไม่เขียน label ลง disk)
 - ความยาวต่อดวงและการรอระหว่างคนกำหนดเป็นค่าคงที่ในโค้ด (ไม่ต้องตั้งใน `.env`): ทุกดวงยาว 60 มม. จากรอยตัดถึงรอยตัด (`LABEL_LENGTH_MM` ใน `app/escpos.py` — เนื้อหาที่สูงเกินถูกย่อ, ที่สั้นกว่าเติมที่ว่างบน-ล่าง) · หักระยะที่ printer kiosk3 เลื่อนกระดาษเองตอนตัด 10 มม. (`CUT_SELF_FEED_MM`) จึงเหลือให้เนื้อหา 50 มม. · ถ้าใบมีดตัดโดนบรรทัดล่าง เพิ่ม `DEFAULT_CUT_FEED_MM` ใน `app/escpos.py` · วัดจากดวงที่ 2 เป็นต้นไป เพราะดวงแรกเริ่มจากรอยตัด/ฉีกครั้งก่อน · รอ 2 วินาทีระหว่างแต่ละคน (`ESCPOS_LABEL_PAUSE_SEC` ใน `app/manager.py`) ไม่เช่นนั้น printer ไม่ตัดดวงก่อน
@@ -550,13 +550,13 @@ sudo usermod -aG lp kiosk
 
 ### เครื่องอ่าน QR แบบ HID (CROWN) และกล้อง
 
-| key | ค่า | default |
-| :-- | :-- | :-- |
-| `KIOSK_QR_CHECK_IN` | `on` \| `off` (ซ่อนวิธี "QR ลงทะเบียน" บนหน้าแรก และ `/kiosk/qr` เด้งกลับหน้าแรก; ถ้า face check ปิดด้วยจะไม่ขอสิทธิ์กล้อง) | `on` |
-| `KIOSK_QR_INPUT` | `camera` (กล้องอย่างเดียว) \| `reader` (เครื่องอ่านอย่างเดียว ไม่ขอสิทธิ์กล้อง) \| `both` | `camera` |
-| `KIOSK_CAMERA_LABEL` | ข้อความในชื่อกล้อง (ไม่สนตัวพิมพ์) เช่น `JSK-RGB`; ไม่เจอ → กล้องหลังตามเดิม | — |
-| `KIOSK_CAMERA_FLIP` | `off` \| `on` (กลับภาพกล้องบนจอซ้าย↔ขวา ทั้งหน้าสแกน QR และหน้าตรวจใบหน้า; เปลี่ยนแค่ภาพที่แสดง ไม่กระทบการอ่าน QR / ตรวจใบหน้า) | `off` |
-| `KIOSK_QR_READER_MAX_GAP_MS` | ช่วงห่างสูงสุดระหว่างตัวอักษรที่นับว่าเป็นเครื่องอ่าน 10–100 ms (วัดด้วย `sudo ./inspect_hardware.sh --qr`; ใช้ค่าสูงสุด × 2) | `50` |
+| key                          | ค่า                                                                                                                              | default  |
+| :--------------------------- | :------------------------------------------------------------------------------------------------------------------------------- | :------- |
+| `KIOSK_QR_CHECK_IN`          | `on` \| `off` (ซ่อนวิธี "QR ลงทะเบียน" บนหน้าแรก และ `/kiosk/qr` เด้งกลับหน้าแรก; ถ้า face check ปิดด้วยจะไม่ขอสิทธิ์กล้อง)      | `on`     |
+| `KIOSK_QR_INPUT`             | `camera` (กล้องอย่างเดียว) \| `reader` (เครื่องอ่านอย่างเดียว ไม่ขอสิทธิ์กล้อง) \| `both`                                        | `camera` |
+| `KIOSK_CAMERA_LABEL`         | ข้อความในชื่อกล้อง (ไม่สนตัวพิมพ์) เช่น `JSK-RGB`; ไม่เจอ → กล้องหลังตามเดิม                                                     | —        |
+| `KIOSK_CAMERA_FLIP`          | `off` \| `on` (กลับภาพกล้องบนจอซ้าย↔ขวา ทั้งหน้าสแกน QR และหน้าตรวจใบหน้า; เปลี่ยนแค่ภาพที่แสดง ไม่กระทบการอ่าน QR / ตรวจใบหน้า) | `off`    |
+| `KIOSK_QR_READER_MAX_GAP_MS` | ช่วงห่างสูงสุดระหว่างตัวอักษรที่นับว่าเป็นเครื่องอ่าน 10–100 ms (วัดด้วย `sudo ./inspect_hardware.sh --qr`; ใช้ค่าสูงสุด × 2)    | `50`     |
 
 เครื่องอ่านต้องพิมพ์แบบ keyboard (US layout) และปิดท้ายด้วย Enter หน้า `/kiosk/qr` จะรับข้อความที่พิมพ์เร็วและยาวอย่างน้อย 8 ตัวอักษรเท่านั้น — แป้นพิมพ์ที่คนกดช้า ๆ ไม่ถูกนับเป็นการสแกน หน้าเว็บอ่านค่าเหล่านี้จาก `kiosk` ในเครื่อง (`POST /api/v1/kiosk/hardware` ไม่ส่งต่อไป server และไม่มี credential)
 
@@ -652,16 +652,16 @@ cd ~/tent/kiosk
 
 #### script ทำอะไรกับเครื่อง
 
-| ทำอะไร | ที่ไหน |
-| --- | --- |
-| `apt install gnome-kiosk gnome-kiosk-script-session` (ถ้ายังไม่มี) | ระบบ |
-| เพิ่ม user เข้า group `input` + ให้รัน `chvt 1-6` ได้โดยไม่ต้องใส่รหัส (สำหรับ `Ctrl+Alt+F1..F6`) | ระบบ · `/etc/sudoers.d/tent-kiosk-chvt` |
-| ให้หน้า login ของ TTY แสดง hostname + IP | `/etc/issue` (backup: `issue.tent-bak`) |
-| เขียนแอปเดียวของ session: วนเปิด `start_kiosk.sh` (ถ้าหลุดจะเปิดใหม่ทุก 30 วินาที) + เปิด `maintenance_hotkey.py` (ตัวรับ `Ctrl+Alt+F1..F6`) ไว้เบื้องหลัง | `~/.local/bin/gnome-kiosk-script` |
-| ข้ามหน้า Welcome ของ GNOME ใน session kiosk | `~/.config/gnome-initial-setup-done` |
-| จำ session เดิม (เช่น `gnome`) ไว้ใช้ตอน `--disable` | `~/.config/tent-kiosk-lockdown.prev-session` |
-| ตั้ง session ตอน login ของ user เป็น kiosk (ผ่าน AccountsService) | `/var/lib/AccountsService/users/<user>` |
-| เปิด autologin (`AutomaticLoginEnable=true`, `AutomaticLogin=<user>`) + backup ครั้งแรก | `/etc/gdm3/daemon.conf` (backup: `daemon.conf.tent-bak`) |
+| ทำอะไร                                                                                                                                                     | ที่ไหน                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `apt install gnome-kiosk gnome-kiosk-script-session` (ถ้ายังไม่มี)                                                                                         | ระบบ                                                     |
+| เพิ่ม user เข้า group `input` + ให้รัน `chvt 1-6` ได้โดยไม่ต้องใส่รหัส (สำหรับ `Ctrl+Alt+F1..F6`)                                                          | ระบบ · `/etc/sudoers.d/tent-kiosk-chvt`                  |
+| ให้หน้า login ของ TTY แสดง hostname + IP                                                                                                                   | `/etc/issue` (backup: `issue.tent-bak`)                  |
+| เขียนแอปเดียวของ session: วนเปิด `start_kiosk.sh` (ถ้าหลุดจะเปิดใหม่ทุก 30 วินาที) + เปิด `maintenance_hotkey.py` (ตัวรับ `Ctrl+Alt+F1..F6`) ไว้เบื้องหลัง | `~/.local/bin/gnome-kiosk-script`                        |
+| ข้ามหน้า Welcome ของ GNOME ใน session kiosk                                                                                                                | `~/.config/gnome-initial-setup-done`                     |
+| จำ session เดิม (เช่น `gnome`) ไว้ใช้ตอน `--disable`                                                                                                       | `~/.config/tent-kiosk-lockdown.prev-session`             |
+| ตั้ง session ตอน login ของ user เป็น kiosk (ผ่าน AccountsService)                                                                                          | `/var/lib/AccountsService/users/<user>`                  |
+| เปิด autologin (`AutomaticLoginEnable=true`, `AutomaticLogin=<user>`) + backup ครั้งแรก                                                                    | `/etc/gdm3/daemon.conf` (backup: `daemon.conf.tent-bak`) |
 
 ไม่แตะ: การหมุนจอ (`~/.config/monitors.xml` เดิมใช้ต่อ), `.env`, XDG autostart เดิม (ยังอยู่ — `flock` กันเปิดซ้อน)
 
@@ -682,6 +682,7 @@ script เปลี่ยน session เป็น kiosk **ก่อน** เป�
 #### กลับเป็นหน้า desktop ปกติ (ซ่อมบำรุง)
 
 **ทางที่ 1 — ผ่าน SSH (แนะนำ)**
+
 ```bash
 cd ~/tent/kiosk
 ./setup_kiosk_lockdown.sh --disable --restart  # จอตู้เข้า desktop GNOME ปกติ (kiosk ยังเปิดผ่าน XDG autostart)
@@ -692,6 +693,7 @@ cd ~/tent/kiosk
 **ทางที่ 2 — ที่ตู้ ใช้คีย์บอร์ด USB (ไม่รู้ IP / SSH ไม่ได้)**: เสียบคีย์บอร์ด → **`Ctrl+Alt+F3`** → หน้า login ตัวอักษรแสดง hostname + IP (เอาไป SSH ต่อได้เลย) → login (ชื่อ + รหัสผ่าน) → รันคำสั่งชุดเดียวกับทางที่ 1 · กลับหน้า kiosk: `Ctrl+Alt+F1` หรือ `F2` (ดูหัวข้อถัดไป)
 
 **ทางที่ 3 — ถ้า script ใช้ไม่ได้ (ทำมือ)**
+
 ```bash
 sudo busctl call org.freedesktop.Accounts /org/freedesktop/Accounts/User$(id -u kiosk) \
   org.freedesktop.Accounts.User SetSession s gnome
@@ -701,6 +703,7 @@ sudo systemctl restart gdm
 > ⚠️ ระหว่าง `--disable` autologin ยังเปิดอยู่ — **ใครเปิดเครื่องก็เข้า desktop ได้โดยไม่ต้องใส่รหัส** ซ่อมเสร็จต้องล็อกกลับทุกครั้ง (`./setup_kiosk_lockdown.sh --restart`) · ถ้ากดเลือก session "GNOME" เองที่หน้า login GDM จะจำค่านั้นไว้เหมือนกัน — ต้องล็อกกลับเช่นกัน
 
 **ปิด autologin ด้วย** (ให้เครื่องขึ้นหน้า login ใส่รหัสทุกครั้ง): คืนไฟล์ backup
+
 ```bash
 sudo cp /etc/gdm3/daemon.conf.tent-bak /etc/gdm3/daemon.conf
 ./setup_kiosk_lockdown.sh --disable --restart
@@ -724,25 +727,27 @@ sudo cp /etc/gdm3/daemon.conf.tent-bak /etc/gdm3/daemon.conf
 #### ใช้กับ user อื่น (`--user`)
 
 ถ้าแยก user ดูแลเครื่อง (มี sudo) กับ user ของ kiosk (ไม่มี sudo) — รันจาก user ดูแลเครื่อง:
+
 ```bash
 ./setup_kiosk_lockdown.sh --user kiosk
 ./setup_kiosk_lockdown.sh --user kiosk --status
 ./setup_kiosk_lockdown.sh --user kiosk --disable --restart
 ```
+
 user ของ kiosk ต้องรัน `kiosk/start_kiosk.sh` ได้ (script ตรวจให้ก่อนติดตั้ง)
 
 #### แก้ปัญหา
 
-| อาการ | สาเหตุ / วิธีแก้ |
-| --- | --- |
-| `--status`: `session ตอน login: gnome — ยังไม่ได้ล็อก kiosk` | ยังไม่ได้ติดตั้ง หรือมีคนเลือก session GNOME ที่หน้า login — รัน `./setup_kiosk_lockdown.sh --restart` |
-| กด `Ctrl+Alt+F3` แล้วไม่มีอะไรเกิดขึ้น | ลอง `Fn+Ctrl+Alt+F3` · ผ่าน SSH: `cat /tmp/kiosk_maintenance_hotkey.log` — `not in the 'input' group` = ยังไม่ได้ restart gdm หลังติดตั้ง · `chvt 3 failed` = ไม่มี sudoers rule (รัน `./setup_kiosk_lockdown.sh --restart`) |
-| `ไม่พบ session GNOME Kiosk Script` | แพ็กเกจไม่ครบ: `sudo apt install gnome-kiosk gnome-kiosk-script-session` แล้ว `ls /usr/share/wayland-sessions/` |
-| `apt install ไม่สำเร็จ` | เน็ต PSU ต้อง login captive portal ก่อน |
-| หลัง restart ขึ้นหน้า text editor แทน kiosk | `~/.local/bin/gnome-kiosk-script` หาย (gnome-kiosk สร้างตัวอย่างแทน) — รัน `./setup_kiosk_lockdown.sh` ใหม่ |
-| จอดำค้าง ไม่ขึ้น kiosk | ดู `cat /tmp/kiosk_autostart.log` — exit 78/79 = `.env` ผิด/credential ใช้ไม่ได้ แก้ `.env` ผ่าน SSH แล้วรอ ≤ 30 วินาที (ไม่ต้อง reboot) |
-| จอกลายเป็นแนวนอน / แตะไม่ตรงปุ่ม | session kiosk ใช้ `~/.config/monitors.xml` ของ user — ตั้งการหมุนจอใน desktop ปกติ (`--disable`) ที่ Settings → Displays แล้วล็อกกลับ |
-| GDM ไม่ขึ้นเลยหลังติดตั้ง | SSH เข้ามา: `sudo cp /etc/gdm3/daemon.conf.tent-bak /etc/gdm3/daemon.conf && sudo systemctl restart gdm` |
+| อาการ                                                        | สาเหตุ / วิธีแก้                                                                                                                                                                                                             |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--status`: `session ตอน login: gnome — ยังไม่ได้ล็อก kiosk` | ยังไม่ได้ติดตั้ง หรือมีคนเลือก session GNOME ที่หน้า login — รัน `./setup_kiosk_lockdown.sh --restart`                                                                                                                       |
+| กด `Ctrl+Alt+F3` แล้วไม่มีอะไรเกิดขึ้น                       | ลอง `Fn+Ctrl+Alt+F3` · ผ่าน SSH: `cat /tmp/kiosk_maintenance_hotkey.log` — `not in the 'input' group` = ยังไม่ได้ restart gdm หลังติดตั้ง · `chvt 3 failed` = ไม่มี sudoers rule (รัน `./setup_kiosk_lockdown.sh --restart`) |
+| `ไม่พบ session GNOME Kiosk Script`                           | แพ็กเกจไม่ครบ: `sudo apt install gnome-kiosk gnome-kiosk-script-session` แล้ว `ls /usr/share/wayland-sessions/`                                                                                                              |
+| `apt install ไม่สำเร็จ`                                      | เน็ต PSU ต้อง login captive portal ก่อน                                                                                                                                                                                      |
+| หลัง restart ขึ้นหน้า text editor แทน kiosk                  | `~/.local/bin/gnome-kiosk-script` หาย (gnome-kiosk สร้างตัวอย่างแทน) — รัน `./setup_kiosk_lockdown.sh` ใหม่                                                                                                                  |
+| จอดำค้าง ไม่ขึ้น kiosk                                       | ดู `cat /tmp/kiosk_autostart.log` — exit 78/79 = `.env` ผิด/credential ใช้ไม่ได้ แก้ `.env` ผ่าน SSH แล้วรอ ≤ 30 วินาที (ไม่ต้อง reboot)                                                                                     |
+| จอกลายเป็นแนวนอน / แตะไม่ตรงปุ่ม                             | session kiosk ใช้ `~/.config/monitors.xml` ของ user — ตั้งการหมุนจอใน desktop ปกติ (`--disable`) ที่ Settings → Displays แล้วล็อกกลับ                                                                                        |
+| GDM ไม่ขึ้นเลยหลังติดตั้ง                                    | SSH เข้ามา: `sudo cp /etc/gdm3/daemon.conf.tent-bak /etc/gdm3/daemon.conf && sudo systemctl restart gdm`                                                                                                                     |
 
 ---
 
@@ -774,6 +779,7 @@ user ของ kiosk ต้องรัน `kiosk/start_kiosk.sh` ได้ (scr
    cd ~/tent/kiosk
    ./setup_printer.sh ~/printer-driver-xprinter_3.13.55_all.deb --test
    ```
+
    - ม้วนไม่ใช่ 80×60 mm (กว้าง×สูง) → ใส่ `--label <กว้าง>x<สูง>` (mm, กว้างไม่เกิน 82) และแก้ `KIOSK_LABEL_MM` ให้ตรงกัน
    - gap ไม่ใช่ 2 mm → ใส่ `--gap <mm>`
    - `--test` พิมพ์ label ทดสอบ 1 ดวง (รันผ่าน SSH ได้) — ต้องออก 1 ดวงพอดี QR สแกนได้
@@ -810,12 +816,12 @@ user ของ kiosk ต้องรัน `kiosk/start_kiosk.sh` ได้ (scr
 
 ### 3. บำรุงรักษา
 
-| เหตุการณ์                     | ขั้นตอน                                                                                                                                                                     |
-| :---------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| อัปเกรด / ติดตั้ง `.deb` ใหม่ | รัน `./setup_printer.sh <deb ใหม่>` ซ้ำ **ทุกครั้ง** — ตัวติดตั้งของ driver เขียนทับ wrapper และสร้าง cron + queue `XP-365B` กลับมา                                         |
-| เปลี่ยนขนาดม้วน label         | (1) แก้ `KIOSK_LABEL_MM` + deploy frontend (2) รัน `./setup_printer.sh --label <W>x<H> --gap <N>` บน **ทุก** Pi (3) `./test_label_print.sh` — (1) กับ (2) ต้องเสร็จพร้อมกัน |
+| เหตุการณ์                     | ขั้นตอน                                                                                                                                                                                                             |
+| :---------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| อัปเกรด / ติดตั้ง `.deb` ใหม่ | รัน `./setup_printer.sh <deb ใหม่>` ซ้ำ **ทุกครั้ง** — ตัวติดตั้งของ driver เขียนทับ wrapper และสร้าง cron + queue `XP-365B` กลับมา                                                                                 |
+| เปลี่ยนขนาดม้วน label         | (1) แก้ `KIOSK_LABEL_MM` + deploy frontend (2) รัน `./setup_printer.sh --label <W>x<H> --gap <N>` บน **ทุก** Pi (3) `./test_label_print.sh` — (1) กับ (2) ต้องเสร็จพร้อมกัน                                         |
 | เปลี่ยนเครื่องพิมพ์ตัวใหม่    | XP-365B รุ่นเดียวกัน: เสียบแทนได้เลย (queue ไม่ผูก serial — CUPS ใช้ XP-365B ตัวไหนก็ได้ที่เสียบอยู่; เสียบทีละตัว) · รุ่นอื่น หรือ `--status` ขึ้น ❌ "queue ผูกกับเครื่องตัวเดียว" → รัน `./setup_printer.sh` ซ้ำ |
-| QR จาง                        | `sudo lpadmin -p tent_xprinter -o Darkness=12` (สูงสุด 15) · ช้าลงให้คมขึ้น `-o PrintSpeed=2`                                                                               |
+| QR จาง                        | `sudo lpadmin -p tent_xprinter -o Darkness=12` (สูงสุด 15) · ช้าลงให้คมขึ้น `-o PrintSpeed=2`                                                                                                                       |
 
 ### 4. แก้ปัญหาเครื่องพิมพ์
 
